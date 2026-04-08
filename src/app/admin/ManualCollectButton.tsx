@@ -10,7 +10,7 @@ type CollectResult = {
   error?: string;
 };
 
-export default function ManualCollectButton({ cronSecret }: { cronSecret: string }) {
+export default function ManualCollectButton() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CollectResult | null>(null);
 
@@ -18,9 +18,9 @@ export default function ManualCollectButton({ cronSecret }: { cronSecret: string
     setLoading(true);
     setResult(null);
     try {
-      const res = await fetch('/api/cron/collect', {
+      const res = await fetch('/api/admin/collect', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${cronSecret}` },
+        credentials: 'include',
       });
       const data = await res.json();
       setResult(data);

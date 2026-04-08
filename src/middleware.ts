@@ -13,8 +13,8 @@ export function middleware(request: NextRequest) {
     return new NextResponse('Not Found', { status: 404 });
   }
 
-  // Admin auth (local server only)
-  if (pathname.startsWith('/admin')) {
+  // Admin auth: covers /admin/* pages AND /api/admin/* endpoints (local server only)
+  if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
     const authHeader = request.headers.get('authorization');
 
     if (authHeader) {

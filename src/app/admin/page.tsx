@@ -52,7 +52,7 @@ export default async function AdminDashboard() {
         </div>
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">수동 수집 실행</p>
-          <ManualCollectButton cronSecret={process.env.CRON_SECRET ?? ''} />
+          <ManualCollectButton />
         </div>
       </div>
 
