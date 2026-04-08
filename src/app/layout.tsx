@@ -17,17 +17,23 @@ const geistMono = localFont({
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai-news-kr.vercel.app';
 
-async function getAdSettings(): Promise<{ adsensePublisherId: string }> {
+async function getLayoutSettings(): Promise<{ adsensePublisherId: string; naverSiteVerificationCode: string }> {
   try {
-    const adsenseSetting = await prisma.setting.findUnique({ where: { key: 'adsense_publisher_id' } });
-    return { adsensePublisherId: adsenseSetting?.value || '' };
+    const [adsenseSetting, naverSetting] = await Promise.all([
+      prisma.setting.findUnique({ where: { key: 'adsense_publisher_id' } }),
+      prisma.setting.findUnique({ where: { key: 'naver_search_advisor_code' } }),
+    ]);
+    return {
+      adsensePublisherId: adsenseSetting?.value || '',
+      naverSiteVerificationCode: naverSetting?.value || '',
+    };
   } catch {
-    return { adsensePublisherId: '' };
+    return { adsensePublisherId: '', naverSiteVerificationCode: '' };
   }
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { adsensePublisherId } = await getAdSettings();
+  const { adsensePublisherId, naverSiteVerificationCode } = await getLayoutSettings();
   return {
     title: "AI 뉴스 KR — 개발자를 위한 AI 최신 소식",
     description:
@@ -35,6 +41,7 @@ export async function generateMetadata(): Promise<Metadata> {
     keywords: ["AI 뉴스", "인공지능", "LLM", "GPT", "머신러닝", "딥러닝", "한국어"],
     metadataBase: new URL(BASE_URL),
     alternates: {
+      canonical: BASE_URL,
       types: {
         'application/rss+xml': [{ url: '/api/rss', title: 'AI 뉴스 KR' }],
       },
@@ -49,6 +56,11 @@ export async function generateMetadata(): Promise<Metadata> {
     ...(adsensePublisherId && {
       other: { 'google-adsense-account': adsensePublisherId },
     }),
+    ...(naverSiteVerificationCode && {
+      verification: {
+        other: { 'naver-site-verification': naverSiteVerificationCode },
+      },
+    }),
   };
 }
 
@@ -57,7 +69,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { adsensePublisherId } = await getAdSettings();
+  const { adsensePublisherId } = await getLayoutSettings();
 
   return (
     <html lang="ko">
