@@ -34,6 +34,11 @@ export async function generateMetadata(): Promise<Metadata> {
       "영어 AI 뉴스를 한국어로 번역·요약해 제공합니다. LLM, 이미지AI, 로봇, 자율주행 등 최신 AI 동향을 빠르게 파악하세요.",
     keywords: ["AI 뉴스", "인공지능", "LLM", "GPT", "머신러닝", "딥러닝", "한국어"],
     metadataBase: new URL(BASE_URL),
+    alternates: {
+      types: {
+        'application/rss+xml': [{ url: '/api/rss', title: 'AI 뉴스 KR' }],
+      },
+    },
     openGraph: {
       title: "AI 뉴스 KR",
       description: "개발자를 위한 AI 최신 소식 — 한국어 번역·요약",
