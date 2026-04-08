@@ -17,32 +17,34 @@ const geistMono = localFont({
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai-news-kr.vercel.app';
 
-export const metadata: Metadata = {
-  title: "AI 뉴스 KR — 개발자를 위한 AI 최신 소식",
-  description:
-    "영어 AI 뉴스를 한국어로 번역·요약해 제공합니다. LLM, 이미지AI, 로봇, 자율주행 등 최신 AI 동향을 빠르게 파악하세요.",
-  keywords: ["AI 뉴스", "인공지능", "LLM", "GPT", "머신러닝", "딥러닝", "한국어"],
-  metadataBase: new URL(BASE_URL),
-  openGraph: {
-    title: "AI 뉴스 KR",
-    description: "개발자를 위한 AI 최신 소식 — 한국어 번역·요약",
-    type: "website",
-    locale: "ko_KR",
-    siteName: "AI 뉴스 KR",
-  },
-};
-
 async function getAdSettings(): Promise<{ adsensePublisherId: string }> {
   try {
-    const [adsenseSetting] = await Promise.all([
-      prisma.setting.findUnique({ where: { key: 'adsense_publisher_id' } }),
-    ]);
-    return {
-      adsensePublisherId: adsenseSetting?.value || '',
-    };
+    const adsenseSetting = await prisma.setting.findUnique({ where: { key: 'adsense_publisher_id' } });
+    return { adsensePublisherId: adsenseSetting?.value || '' };
   } catch {
     return { adsensePublisherId: '' };
   }
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { adsensePublisherId } = await getAdSettings();
+  return {
+    title: "AI 뉴스 KR — 개발자를 위한 AI 최신 소식",
+    description:
+      "영어 AI 뉴스를 한국어로 번역·요약해 제공합니다. LLM, 이미지AI, 로봇, 자율주행 등 최신 AI 동향을 빠르게 파악하세요.",
+    keywords: ["AI 뉴스", "인공지능", "LLM", "GPT", "머신러닝", "딥러닝", "한국어"],
+    metadataBase: new URL(BASE_URL),
+    openGraph: {
+      title: "AI 뉴스 KR",
+      description: "개발자를 위한 AI 최신 소식 — 한국어 번역·요약",
+      type: "website",
+      locale: "ko_KR",
+      siteName: "AI 뉴스 KR",
+    },
+    ...(adsensePublisherId && {
+      other: { 'google-adsense-account': adsensePublisherId },
+    }),
+  };
 }
 
 export default async function RootLayout({
