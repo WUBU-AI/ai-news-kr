@@ -264,6 +264,22 @@ export default async function ArticlePage({ params }: PageProps) {
         </section>
       )}
 
+      {/* Detailed Summary */}
+      {article.detailedSummary && (
+        <section className="mb-6">
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+            상세 분석
+          </h2>
+          <div className="space-y-3">
+            {article.detailedSummary.split('\n').filter(Boolean).map((para, i) => (
+              <p key={i} className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
+                {para}
+              </p>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Tags */}
       {article.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-6">

@@ -22,6 +22,7 @@ model Article {
   tags             String[]
   publishedAt      DateTime? @map("published_at")
   collectedAt      DateTime  @default(now()) @map("collected_at")
+  detailedSummary  String?   @map("detailed_summary") @db.Text
   isFeatured       Boolean   @default(false) @map("is_featured")
   viewCount        Int       @default(0) @map("view_count")
 

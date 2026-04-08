@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import AdUnit from '@/components/AdUnit';
+import FilterBar from '@/components/FilterBar';
+import { Suspense } from 'react';
 
 const PAGE_SIZE = 20;
 
@@ -53,38 +55,86 @@ function timeAgo(date: Date | null): string {
 }
 
 interface PageProps {
-  searchParams: { page?: string };
+  searchParams: Promise<{ page?: string; category?: string; tag?: string }>;
 }
 
 export default async function HomePage({ searchParams }: PageProps) {
-  const page = Math.max(1, parseInt(searchParams?.page || '1', 10));
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params?.page || '1', 10));
+  const category = params?.category || null;
+  const tag = params?.tag || null;
   const skip = (page - 1) * PAGE_SIZE;
+
+  const translatedWhere = {
+    translatedTitle: { not: null },
+    ...(category ? { category } : {}),
+    ...(tag ? { tags: { has: tag } } : {}),
+  };
 
   let articles: Awaited<ReturnType<typeof prisma.article.findMany>> = [];
   let total = 0;
   let lastCollected: Date | null = null;
   let dbError = false;
   let adsensePublisherId = '';
+  let popularTags: string[] = [];
+  let untranslatedArticles: { id: string; originalTitle: string; importanceScore: number; sourceUrl: string; sourceName: string; publishedAt: Date | null }[] = [];
 
   try {
-    const [articleData, countData, lastLog, adSetting] = await Promise.all([
+    const [articleData, countData, lastLog, adSetting, tagRows, untranslatedData] = await Promise.all([
       prisma.article.findMany({
-        where: { translatedTitle: { not: null } },
+        where: translatedWhere,
         orderBy: [{ importanceScore: 'desc' }, { publishedAt: 'desc' }],
         skip,
         take: PAGE_SIZE,
       }),
-      prisma.article.count({ where: { translatedTitle: { not: null } } }),
+      prisma.article.count({ where: translatedWhere }),
       prisma.collectionLog.findFirst({
         orderBy: { runAt: 'desc' },
         select: { runAt: true },
       }),
       prisma.setting.findUnique({ where: { key: 'adsense_publisher_id' } }),
+      // Collect popular tags from recent articles
+      prisma.article.findMany({
+        where: { translatedTitle: { not: null } },
+        select: { tags: true },
+        take: 100,
+        orderBy: { publishedAt: 'desc' },
+      }),
+      // Untranslated articles (score below threshold — not translated yet)
+      !category && !tag
+        ? prisma.article.findMany({
+            where: { translatedTitle: null },
+            orderBy: [{ importanceScore: 'desc' }, { publishedAt: 'desc' }],
+            take: 30,
+            select: {
+              id: true,
+              originalTitle: true,
+              importanceScore: true,
+              sourceUrl: true,
+              sourceName: true,
+              publishedAt: true,
+            },
+          })
+        : Promise.resolve([]),
     ]);
+
     articles = articleData;
     total = countData;
     lastCollected = lastLog?.runAt ?? null;
     adsensePublisherId = adSetting?.value || '';
+    untranslatedArticles = untranslatedData as typeof untranslatedArticles;
+
+    // Tally tag frequencies
+    const tagCount: Record<string, number> = {};
+    for (const row of tagRows) {
+      for (const t of row.tags) {
+        tagCount[t] = (tagCount[t] || 0) + 1;
+      }
+    }
+    popularTags = Object.entries(tagCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([t]) => t);
   } catch {
     dbError = true;
   }
@@ -107,7 +157,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 mb-5 text-xs text-gray-500 dark:text-gray-400">
+      <div className="flex items-center gap-4 mb-4 text-xs text-gray-500 dark:text-gray-400">
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> 중요도 높음 (8–10)
         </span>
@@ -118,6 +168,11 @@ export default async function HomePage({ searchParams }: PageProps) {
           <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> 낮음 (1–3)
         </span>
       </div>
+
+      {/* Filter Bar */}
+      <Suspense>
+        <FilterBar availableTags={popularTags} />
+      </Suspense>
 
       {/* DB Error */}
       {dbError && (
@@ -133,9 +188,11 @@ export default async function HomePage({ searchParams }: PageProps) {
       {!dbError && articles.length === 0 && (
         <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-12 text-center">
           <div className="text-4xl mb-3">📰</div>
-          <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">아직 수집된 기사가 없습니다</p>
+          <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {category || tag ? '해당 필터에 맞는 기사가 없습니다' : '아직 수집된 기사가 없습니다'}
+          </p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            뉴스는 3시간마다 자동으로 수집됩니다.
+            {category || tag ? '다른 카테고리나 태그를 선택해 보세요.' : '뉴스는 3시간마다 자동으로 수집됩니다.'}
           </p>
         </div>
       )}
@@ -152,58 +209,58 @@ export default async function HomePage({ searchParams }: PageProps) {
               <Link
                 key={article.id}
                 href={`/articles/${article.id}`}
-              className="block rounded-lg border border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors p-4 group"
-            >
-              {/* Top row */}
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  {article.category && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${categoryColor(article.category)}`}>
-                      {article.category}
+                className="block rounded-lg border border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors p-4 group"
+              >
+                {/* Top row */}
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    {article.category && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${categoryColor(article.category)}`}>
+                        {article.category}
+                      </span>
+                    )}
+                    <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                      {article.sourceName}
                     </span>
-                  )}
-                  <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
-                    {article.sourceName}
-                  </span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
-                    {timeAgo(article.publishedAt)}
+                    <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                      {timeAgo(article.publishedAt)}
+                    </span>
+                  </div>
+                  {/* Importance badge */}
+                  <span className={`shrink-0 text-xs font-mono px-2 py-0.5 rounded border font-semibold ${importanceColor(article.importanceScore)}`}>
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${importanceDot(article.importanceScore)}`} />
+                    {article.importanceScore.toFixed(1)}
                   </span>
                 </div>
-                {/* Importance badge */}
-                <span className={`shrink-0 text-xs font-mono px-2 py-0.5 rounded border font-semibold ${importanceColor(article.importanceScore)}`}>
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${importanceDot(article.importanceScore)}`} />
-                  {article.importanceScore.toFixed(1)}
-                </span>
-              </div>
 
-              {/* Title */}
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug mb-2">
-                {article.translatedTitle || article.originalTitle}
-              </h2>
+                {/* Title */}
+                <h2 className="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug mb-2">
+                  {article.translatedTitle || article.originalTitle}
+                </h2>
 
-              {/* Bullet preview */}
-              {article.summaryBullets.length > 0 && (
-                <ul className="space-y-0.5 mb-2">
-                  {article.summaryBullets.slice(0, 2).map((bullet, i) => (
-                    <li key={i} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-1.5">
-                      <span className="text-gray-400 mt-0.5 shrink-0">•</span>
-                      <span className="line-clamp-1">{bullet}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                {/* Bullet preview */}
+                {article.summaryBullets.length > 0 && (
+                  <ul className="space-y-0.5 mb-2">
+                    {article.summaryBullets.slice(0, 2).map((bullet, i) => (
+                      <li key={i} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-1.5">
+                        <span className="text-gray-400 mt-0.5 shrink-0">•</span>
+                        <span className="line-clamp-1">{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-              {/* Tags */}
-              {article.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {article.tags.slice(0, 4).map((tag) => (
-                    <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </Link>
+                {/* Tags */}
+                {article.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {article.tags.slice(0, 4).map((t) => (
+                      <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </Link>
             </>
           ))}
         </div>
@@ -214,7 +271,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         <div className="flex items-center justify-center gap-2 mt-8">
           {page > 1 && (
             <Link
-              href={`/?page=${page - 1}`}
+              href={`/?page=${page - 1}${category ? `&category=${category}` : ''}${tag ? `&tag=${tag}` : ''}`}
               className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               ← 이전
@@ -225,13 +282,55 @@ export default async function HomePage({ searchParams }: PageProps) {
           </span>
           {page < totalPages && (
             <Link
-              href={`/?page=${page + 1}`}
+              href={`/?page=${page + 1}${category ? `&category=${category}` : ''}${tag ? `&tag=${tag}` : ''}`}
               className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               다음 →
             </Link>
           )}
         </div>
+      )}
+
+      {/* Untranslated articles section */}
+      {!category && !tag && untranslatedArticles.length > 0 && (
+        <section className="mt-12">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-base font-semibold text-gray-700 dark:text-gray-300">
+              번역 대기 중인 기사
+            </h2>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+              {untranslatedArticles.length}건
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
+            중요도 기준으로 번역 우선순위에서 제외된 기사입니다. 원문 링크로 직접 확인할 수 있습니다.
+          </p>
+          <div className="space-y-1.5">
+            {untranslatedArticles.map((article) => (
+              <div
+                key={article.id}
+                className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800/50 bg-gray-50 dark:bg-gray-900/50"
+              >
+                <span className={`shrink-0 text-xs font-mono px-1.5 py-0.5 rounded border font-semibold ${importanceColor(article.importanceScore)}`}>
+                  <span className={`inline-block w-1 h-1 rounded-full mr-0.5 ${importanceDot(article.importanceScore)}`} />
+                  {article.importanceScore.toFixed(1)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{article.originalTitle}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">{article.sourceName} · {timeAgo(article.publishedAt)}</p>
+                </div>
+                <a
+                  href={article.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  원문 →
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

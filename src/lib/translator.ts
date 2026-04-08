@@ -14,6 +14,7 @@ interface TranslationResult {
   translatedTitle: string;
   summaryBullets: string[];
   engineerNote: string;
+  detailedSummary: string;
   category: Category;
   tags: string[];
 }
@@ -33,6 +34,7 @@ Please analyze and respond with ONLY a valid JSON object in this exact format:
     "핵심 내용 3"
   ],
   "engineerNote": "개발자/엔지니어 관점에서 중요한 이유 한 줄",
+  "detailedSummary": "2~4 문단으로 구성된 더 상세한 한국어 내용. 기술적 배경, 작동 원리, 실제 영향, 개발자가 알아야 할 세부사항을 포함한다.",
   "category": "카테고리",
   "tags": ["태그1", "태그2", "태그3"]
 }
@@ -41,6 +43,7 @@ Rules:
 - translatedTitle: Translate the title naturally into Korean
 - summaryBullets: 3 to 5 bullet points in Korean summarizing the key points
 - engineerNote: One concise Korean sentence explaining why this matters to developers/engineers
+- detailedSummary: 2 to 4 paragraphs in Korean with deeper analysis — technical background, how it works, real-world impact, and what developers should know. Each paragraph separated by a newline.
 - category: Choose exactly ONE from: LLM, 이미지AI, 로봇, 자율주행, 업계동향, 연구, 기타
 - tags: 3 to 5 relevant Korean or English tags (short keywords)
 
@@ -94,6 +97,7 @@ function parseResponse(text: string, originalTitle: string): TranslationResult {
     translatedTitle: parsed.translatedTitle || originalTitle,
     summaryBullets: Array.isArray(parsed.summaryBullets) ? parsed.summaryBullets.slice(0, 5) : [],
     engineerNote: parsed.engineerNote || '',
+    detailedSummary: parsed.detailedSummary || '',
     category,
     tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 5) : [],
   };
@@ -149,6 +153,7 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
         data: {
           translatedTitle: result.translatedTitle,
           summaryBullets: [...result.summaryBullets, result.engineerNote].filter(Boolean),
+          detailedSummary: result.detailedSummary || null,
           category: result.category,
           tags: result.tags,
         },
