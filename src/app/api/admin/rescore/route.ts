@@ -2,11 +2,16 @@ import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '@/lib/prisma';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// POST /api/admin/rescore
+// Re-scores articles whose importanceScore is exactly 5.
+// Pass ?all=true to re-score every article regardless of current score.
+// Requires ANTHROPIC_API_KEY to be set in the environment.
 
 async function scoreImportance(title: string, snippet: string): Promise<number> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not configured');
+  }
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   try {
     const prompt = `You are evaluating AI news articles for their importance to software developers and engineers.
 
@@ -41,10 +46,14 @@ Respond with ONLY a single integer from 1 to 10. No explanation.`;
   }
 }
 
-// POST /api/admin/rescore
-// Re-scores articles whose importanceScore is exactly 5.
-// Pass ?all=true to re-score every article regardless of current score.
 export async function POST(request: Request) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json(
+      { success: false, error: 'ANTHROPIC_API_KEY가 서버에 설정되지 않았습니다.' },
+      { status: 500 },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const rescoreAll = searchParams.get('all') === 'true';
 
