@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import ManualCollectButton from './ManualCollectButton';
+import RescoreButton from './RescoreButton';
 
 function formatKST(date: Date | null): string {
   if (!date) return '-';
@@ -45,7 +46,7 @@ export default async function AdminDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">오늘 수집된 기사</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{todayCount}</p>
@@ -53,6 +54,10 @@ export default async function AdminDashboard() {
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">수동 수집 실행</p>
           <ManualCollectButton />
+        </div>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Score 재계산</p>
+          <RescoreButton />
         </div>
       </div>
 
