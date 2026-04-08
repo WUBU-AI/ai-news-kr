@@ -39,15 +39,19 @@ Summary: ${snippet || '(no summary available)'}
 Rate the importance of this article on a scale from 1 to 10 for developers/engineers who want to stay up-to-date with AI.
 
 Scoring guide:
-- 10: Major breakthrough, new model release, critical industry change
-- 7-9: Significant research, notable product launch, important technique
-- 4-6: Interesting development, useful tool, relevant trend
-- 1-3: Minor update, opinion piece, low-relevance news
+- 10: Major breakthrough, new model release (GPT-5, Claude 4, Gemini 2, etc.), new architecture (Transformer variant, SSM, MoE), critical industry change
+- 8-9: New open-source model, significant product launch, important AI framework/library, major API update, new dev tool
+- 5-7: Interesting research finding, useful technique, relevant AI trend, performance benchmark
+- 3-4: Company news, partnership announcements, opinion pieces with technical insight
+- 1-2: Minor update, pure business news, low-technical-relevance content
+
+Priority boost for: new product/architecture releases, open-source releases, practical developer tools, novel techniques.
+Downgrade for: opinion only, business-only news, repetitive coverage.
 
 Respond with ONLY a single integer from 1 to 10. No explanation.`;
 
     const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 10,
       messages: [{ role: 'user', content: prompt }],
     });
