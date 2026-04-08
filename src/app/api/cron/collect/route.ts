@@ -38,6 +38,7 @@ export async function POST(request: Request) {
       sourcesChecked: collectResult.sourcesChecked,
       articlesCollected: collectResult.articlesCollected,
       articlesTranslated: translateResult.articlesTranslated,
+      translateModel: translateResult.modelUsed,
       errors: allErrors,
     });
   } catch (err) {

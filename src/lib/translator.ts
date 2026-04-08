@@ -1,9 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { execSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { prisma } from './prisma';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// Supported local CLI translate models
+export type TranslateModel = 'claude_cli' | 'gemini_cli' | 'codex_cli';
 
 const VALID_CATEGORIES = ['LLM', '이미지AI', '로봇', '자율주행', '업계동향', '연구', '기타'] as const;
 type Category = (typeof VALID_CATEGORIES)[number];
@@ -16,11 +18,8 @@ interface TranslationResult {
   tags: string[];
 }
 
-async function translateAndSummarize(
-  originalTitle: string,
-  originalContent: string | null
-): Promise<TranslationResult> {
-  const prompt = `You are an AI news translator and summarizer for Korean software engineers and developers.
+function buildPrompt(originalTitle: string, originalContent: string | null): string {
+  return `You are an AI news translator and summarizer for Korean software engineers and developers.
 
 Article title (English): ${originalTitle}
 Article content/snippet: ${originalContent || '(no content available)'}
@@ -46,19 +45,43 @@ Rules:
 - tags: 3 to 5 relevant Korean or English tags (short keywords)
 
 Respond with ONLY the JSON object, no other text.`;
+}
 
-  const message = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: prompt }],
-  });
+function runCli(model: TranslateModel, prompt: string): string {
+  // Write prompt to a temp file to avoid shell injection and arg length limits
+  const tmpFile = path.join(os.tmpdir(), `ai-news-translate-${Date.now()}.txt`);
+  try {
+    fs.writeFileSync(tmpFile, prompt, 'utf8');
 
-  const text = message.content[0].type === 'text' ? message.content[0].text.trim() : '';
+    let cmd: string;
+    switch (model) {
+      case 'claude_cli':
+        cmd = `claude -p "$(cat ${tmpFile})"`;
+        break;
+      case 'gemini_cli':
+        cmd = `gemini -p "$(cat ${tmpFile})"`;
+        break;
+      case 'codex_cli':
+        cmd = `codex exec "$(cat ${tmpFile})"`;
+        break;
+    }
 
-  // Parse JSON response
+    const output = execSync(cmd, {
+      timeout: 60_000,
+      encoding: 'utf8',
+      shell: '/bin/bash',
+    });
+
+    return output.trim();
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+  }
+}
+
+function parseResponse(text: string, originalTitle: string): TranslationResult {
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error(`Invalid JSON response from Claude: ${text.slice(0, 100)}`);
+    throw new Error(`No JSON found in CLI response: ${text.slice(0, 100)}`);
   }
 
   const parsed = JSON.parse(jsonMatch[0]) as Partial<TranslationResult>;
@@ -76,26 +99,42 @@ Respond with ONLY the JSON object, no other text.`;
   };
 }
 
+async function translateAndSummarize(
+  originalTitle: string,
+  originalContent: string | null,
+  model: TranslateModel
+): Promise<TranslationResult> {
+  const prompt = buildPrompt(originalTitle, originalContent);
+  const text = runCli(model, prompt);
+  return parseResponse(text, originalTitle);
+}
+
 export interface TranslationSummary {
   articlesTranslated: number;
+  modelUsed: TranslateModel;
   errors: string[];
 }
 
 export async function translateTopArticles(): Promise<TranslationSummary> {
-  // Get collect_count from settings (default 3)
-  const setting = await prisma.setting.findUnique({ where: { key: 'collect_count' } });
-  const collectCount = setting ? parseInt(setting.value, 10) || 3 : 3;
+  // Read settings: collect_count (default 3) and translate_model (default claude_cli)
+  const [countSetting, modelSetting] = await Promise.all([
+    prisma.setting.findUnique({ where: { key: 'collect_count' } }),
+    prisma.setting.findUnique({ where: { key: 'translate_model' } }),
+  ]);
+
+  const collectCount = countSetting ? parseInt(countSetting.value, 10) || 3 : 3;
+  const modelValue = modelSetting?.value as TranslateModel | undefined;
+  const model: TranslateModel =
+    modelValue && ['claude_cli', 'gemini_cli', 'codex_cli'].includes(modelValue)
+      ? modelValue
+      : 'claude_cli';
 
   // Fetch top N untranslated articles by importance score
   const articles = await prisma.article.findMany({
     where: { translatedTitle: null },
     orderBy: { importanceScore: 'desc' },
     take: collectCount,
-    select: {
-      id: true,
-      originalTitle: true,
-      originalContent: true,
-    },
+    select: { id: true, originalTitle: true, originalContent: true },
   });
 
   const errors: string[] = [];
@@ -103,7 +142,7 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
 
   for (const article of articles) {
     try {
-      const result = await translateAndSummarize(article.originalTitle, article.originalContent);
+      const result = await translateAndSummarize(article.originalTitle, article.originalContent, model);
 
       await prisma.article.update({
         where: { id: article.id },
@@ -122,5 +161,5 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
     }
   }
 
-  return { articlesTranslated: translated, errors };
+  return { articlesTranslated: translated, modelUsed: model, errors };
 }
