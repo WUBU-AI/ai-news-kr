@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { collectAllFeeds } from '@/lib/rss-collector';
+import { translateTopArticles } from '@/lib/translator';
+import { prisma } from '@/lib/prisma';
 
 function isAuthorized(request: Request): boolean {
   const authHeader = request.headers.get('authorization');
   if (authHeader === `Bearer ${process.env.CRON_SECRET}`) return true;
-  // Also allow requests from Vercel Cron (no auth in dev)
+  // Vercel Cron sends the secret in x-vercel-signature or as authorization header
+  const vercelCronSecret = request.headers.get('x-vercel-cron-secret');
+  if (vercelCronSecret && vercelCronSecret === process.env.CRON_SECRET) return true;
   if (process.env.NODE_ENV === 'development') return true;
   return false;
 }
@@ -15,12 +19,26 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await collectAllFeeds();
+    // Step 1: Collect articles from RSS feeds (includes importance scoring)
+    const collectResult = await collectAllFeeds();
+
+    // Step 2: Translate and summarize top N articles
+    const translateResult = await translateTopArticles();
+
+    // Update the latest collection log with translation count
+    await prisma.collectionLog.updateMany({
+      where: { articlesTranslated: 0 },
+      data: { articlesTranslated: translateResult.articlesTranslated },
+    });
+
+    const allErrors = [...collectResult.errors, ...translateResult.errors];
+
     return NextResponse.json({
       success: true,
-      sourcesChecked: result.sourcesChecked,
-      articlesCollected: result.articlesCollected,
-      errors: result.errors,
+      sourcesChecked: collectResult.sourcesChecked,
+      articlesCollected: collectResult.articlesCollected,
+      articlesTranslated: translateResult.articlesTranslated,
+      errors: allErrors,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -28,7 +46,7 @@ export async function POST(request: Request) {
   }
 }
 
-// Also support GET for Vercel Cron compatibility
+// Vercel Cron uses GET
 export async function GET(request: Request) {
   return POST(request);
 }

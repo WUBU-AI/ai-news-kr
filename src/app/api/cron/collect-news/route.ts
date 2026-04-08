@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { collectAllFeeds } from '@/lib/rss-collector';
+import { translateTopArticles } from '@/lib/translator';
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -8,12 +9,20 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await collectAllFeeds();
+    // Step 1: Collect from RSS feeds (includes importance scoring)
+    const collectResult = await collectAllFeeds();
+
+    // Step 2: Translate and summarize top N articles
+    const translateResult = await translateTopArticles();
+
+    const allErrors = [...collectResult.errors, ...translateResult.errors];
+
     return NextResponse.json({
       success: true,
-      sourcesChecked: result.sourcesChecked,
-      articlesCollected: result.articlesCollected,
-      errors: result.errors,
+      sourcesChecked: collectResult.sourcesChecked,
+      articlesCollected: collectResult.articlesCollected,
+      articlesTranslated: translateResult.articlesTranslated,
+      errors: allErrors,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
