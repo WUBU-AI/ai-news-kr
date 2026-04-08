@@ -21,6 +21,7 @@ export default function SettingsForm({ initialSettings, initialSources }: Props)
     adsense_publisher_id: initialSettings['adsense_publisher_id'] || '',
     coupang_tracking_id: initialSettings['coupang_tracking_id'] || '',
     google_search_console_code: initialSettings['google_search_console_code'] || '',
+    naver_search_advisor_code: initialSettings['naver_search_advisor_code'] || '',
   });
   const [sources, setSources] = useState<RssSource[]>(initialSources);
   const [saving, setSaving] = useState(false);
@@ -176,6 +177,22 @@ export default function SettingsForm({ initialSettings, initialSources }: Props)
           />
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
             입력 후 저장하면 <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">/google[code].html</code> 경로로 자동 인증됩니다.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+            네이버 서치어드바이저 인증 코드
+          </label>
+          <input
+            type="text"
+            placeholder="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+            value={settings.naver_search_advisor_code}
+            onChange={(e) => setSettings((p) => ({ ...p, naver_search_advisor_code: e.target.value }))}
+            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            저장하면 <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">&lt;meta name=&quot;naver-site-verification&quot;&gt;</code> 태그가 자동 삽입됩니다.
           </p>
         </div>
       </section>

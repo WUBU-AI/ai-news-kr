@@ -3,6 +3,17 @@ import Link from 'next/link';
 import AdUnit from '@/components/AdUnit';
 import FilterBar from '@/components/FilterBar';
 import { Suspense } from 'react';
+import type { Metadata } from 'next';
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai-news-kr.vercel.app';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    alternates: {
+      canonical: BASE_URL,
+    },
+  };
+}
 
 const PAGE_SIZE = 20;
 
