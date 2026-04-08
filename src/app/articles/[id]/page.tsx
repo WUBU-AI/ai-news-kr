@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import AdUnit from '@/components/AdUnit';
+import CoupangBanner from '@/components/CoupangBanner';
 
 function importanceColor(score: number): string {
   if (score >= 8) return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
@@ -57,6 +59,8 @@ function timeAgo(date: Date | null): string {
   return formatKST(date);
 }
 
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai-news-kr.vercel.app';
+
 interface PageProps {
   params: { id: string };
 }
@@ -65,14 +69,42 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   try {
     const article = await prisma.article.findUnique({
       where: { id: params.id },
-      select: { translatedTitle: true, originalTitle: true, summaryBullets: true },
+      select: {
+        translatedTitle: true,
+        originalTitle: true,
+        summaryBullets: true,
+        tags: true,
+        category: true,
+        publishedAt: true,
+      },
     });
     if (!article) return {};
     const title = article.translatedTitle || article.originalTitle;
     const desc = article.summaryBullets[0] ?? '';
+    const pageUrl = `${BASE_URL}/articles/${params.id}`;
     return {
-      title: `${title} — AI 뉴스 KR`,
+      title: `${title} | AI 뉴스 한국어`,
       description: desc,
+      keywords: article.tags,
+      openGraph: {
+        title: `${title} | AI 뉴스 한국어`,
+        description: desc,
+        url: pageUrl,
+        type: 'article',
+        locale: 'ko_KR',
+        publishedTime: article.publishedAt?.toISOString(),
+        section: article.category ?? undefined,
+        tags: article.tags,
+        siteName: 'AI 뉴스 KR',
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: `${title} | AI 뉴스 한국어`,
+        description: desc,
+      },
+      alternates: {
+        canonical: pageUrl,
+      },
     };
   } catch {
     return {};
@@ -93,9 +125,19 @@ type RelatedArticle = {
 export default async function ArticlePage({ params }: PageProps) {
   let article: Awaited<ReturnType<typeof prisma.article.findUnique>> = null;
   let related: RelatedArticle[] = [];
+  let adsensePublisherId = '';
+  let coupangTrackingId = '';
 
   try {
-    article = await prisma.article.findUnique({ where: { id: params.id } });
+    const [articleData, adSetting, coupangSetting] = await Promise.all([
+      prisma.article.findUnique({ where: { id: params.id } }),
+      prisma.setting.findUnique({ where: { key: 'adsense_publisher_id' } }),
+      prisma.setting.findUnique({ where: { key: 'coupang_tracking_id' } }),
+    ]);
+    article = articleData;
+    adsensePublisherId = adSetting?.value || '';
+    coupangTrackingId = coupangSetting?.value || '';
+
     if (!article) notFound();
 
     // Increment view count
@@ -136,8 +178,30 @@ export default async function ArticlePage({ params }: PageProps) {
 
   if (!article) notFound();
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: article.translatedTitle || article.originalTitle,
+    description: article.summaryBullets[0] ?? '',
+    url: `${BASE_URL}/articles/${params.id}`,
+    datePublished: article.publishedAt?.toISOString(),
+    dateModified: article.publishedAt?.toISOString(),
+    publisher: {
+      '@type': 'Organization',
+      name: 'AI 뉴스 KR',
+      url: BASE_URL,
+    },
+    keywords: article.tags.join(', '),
+    articleSection: article.category ?? undefined,
+    inLanguage: 'ko',
+  };
+
   return (
     <article>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Back link */}
       <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mb-5 transition-colors">
         ← 목록으로
@@ -220,6 +284,14 @@ export default async function ArticlePage({ params }: PageProps) {
       >
         원문 보기 →
       </a>
+
+      {/* Ad + 쿠팡 배너 */}
+      {adsensePublisherId && (
+        <AdUnit publisherId={adsensePublisherId} format="auto" className="mt-8" />
+      )}
+      {coupangTrackingId && (
+        <CoupangBanner trackingId={coupangTrackingId} className="mt-4" />
+      )}
 
       {/* Related Articles */}
       {related.length > 0 && (

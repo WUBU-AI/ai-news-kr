@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { prisma } from "@/lib/prisma";
+import AdSenseScript from "@/components/AdSenseScript";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -13,29 +15,49 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai-news-kr.vercel.app';
+
 export const metadata: Metadata = {
   title: "AI 뉴스 KR — 개발자를 위한 AI 최신 소식",
   description:
     "영어 AI 뉴스를 한국어로 번역·요약해 제공합니다. LLM, 이미지AI, 로봇, 자율주행 등 최신 AI 동향을 빠르게 파악하세요.",
   keywords: ["AI 뉴스", "인공지능", "LLM", "GPT", "머신러닝", "딥러닝", "한국어"],
+  metadataBase: new URL(BASE_URL),
   openGraph: {
     title: "AI 뉴스 KR",
     description: "개발자를 위한 AI 최신 소식 — 한국어 번역·요약",
     type: "website",
     locale: "ko_KR",
+    siteName: "AI 뉴스 KR",
   },
 };
 
-export default function RootLayout({
+async function getAdSettings(): Promise<{ adsensePublisherId: string }> {
+  try {
+    const [adsenseSetting] = await Promise.all([
+      prisma.setting.findUnique({ where: { key: 'adsense_publisher_id' } }),
+    ]);
+    return {
+      adsensePublisherId: adsenseSetting?.value || '',
+    };
+  } catch {
+    return { adsensePublisherId: '' };
+  }
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { adsensePublisherId } = await getAdSettings();
+
   return (
     <html lang="ko">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100`}
       >
+        {adsensePublisherId && <AdSenseScript publisherId={adsensePublisherId} />}
         <nav className="sticky top-0 z-50 border-b border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-950/90 backdrop-blur-sm">
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
             <a href="/" className="flex items-center gap-2 font-bold text-lg">

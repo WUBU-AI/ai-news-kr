@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
+import AdUnit from '@/components/AdUnit';
 
 const PAGE_SIZE = 20;
 
@@ -63,9 +64,10 @@ export default async function HomePage({ searchParams }: PageProps) {
   let total = 0;
   let lastCollected: Date | null = null;
   let dbError = false;
+  let adsensePublisherId = '';
 
   try {
-    [articles, total] = await Promise.all([
+    const [articleData, countData, lastLog, adSetting] = await Promise.all([
       prisma.article.findMany({
         where: { translatedTitle: { not: null } },
         orderBy: [{ importanceScore: 'desc' }, { publishedAt: 'desc' }],
@@ -73,13 +75,16 @@ export default async function HomePage({ searchParams }: PageProps) {
         take: PAGE_SIZE,
       }),
       prisma.article.count({ where: { translatedTitle: { not: null } } }),
+      prisma.collectionLog.findFirst({
+        orderBy: { runAt: 'desc' },
+        select: { runAt: true },
+      }),
+      prisma.setting.findUnique({ where: { key: 'adsense_publisher_id' } }),
     ]);
-
-    const lastLog = await prisma.collectionLog.findFirst({
-      orderBy: { runAt: 'desc' },
-      select: { runAt: true },
-    });
+    articles = articleData;
+    total = countData;
     lastCollected = lastLog?.runAt ?? null;
+    adsensePublisherId = adSetting?.value || '';
   } catch {
     dbError = true;
   }
@@ -138,10 +143,15 @@ export default async function HomePage({ searchParams }: PageProps) {
       {/* Article List */}
       {articles.length > 0 && (
         <div className="space-y-4">
-          {articles.map((article) => (
-            <Link
-              key={article.id}
-              href={`/articles/${article.id}`}
+          {articles.map((article, index) => (
+            <>
+              {/* Ad after every 5th article */}
+              {index > 0 && index % 5 === 0 && adsensePublisherId && (
+                <AdUnit key={`ad-${index}`} publisherId={adsensePublisherId} format="auto" className="my-2" />
+              )}
+              <Link
+                key={article.id}
+                href={`/articles/${article.id}`}
               className="block rounded-lg border border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors p-4 group"
             >
               {/* Top row */}
@@ -194,6 +204,7 @@ export default async function HomePage({ searchParams }: PageProps) {
                 </div>
               )}
             </Link>
+            </>
           ))}
         </div>
       )}
