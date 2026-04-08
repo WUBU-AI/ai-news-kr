@@ -122,7 +122,7 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
     prisma.setting.findUnique({ where: { key: 'translate_model' } }),
   ]);
 
-  const collectCount = countSetting ? parseInt(countSetting.value, 10) || 3 : 3;
+  const collectCount = countSetting ? parseInt(countSetting.value, 10) || 10 : 10;
   const modelValue = modelSetting?.value as TranslateModel | undefined;
   const model: TranslateModel =
     modelValue && ['claude_cli', 'gemini_cli', 'codex_cli'].includes(modelValue)
