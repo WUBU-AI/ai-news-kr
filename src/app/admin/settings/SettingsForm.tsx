@@ -15,6 +15,7 @@ interface Props {
 
 export default function SettingsForm({ initialSettings, initialSources }: Props) {
   const [settings, setSettings] = useState({
+    collect_interval_hours: initialSettings['collect_interval_hours'] || '3',
     collect_count: initialSettings['collect_count'] || '3',
     anthropic_api_key: initialSettings['anthropic_api_key'] || '',
     adsense_publisher_id: initialSettings['adsense_publisher_id'] || '',
@@ -62,6 +63,21 @@ export default function SettingsForm({ initialSettings, initialSources }: Props)
       {/* 수집 설정 */}
       <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
         <h2 className="font-semibold text-gray-900 dark:text-gray-100">수집 설정</h2>
+
+        <div>
+          <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+            수집 주기 (시간 단위, 기본값 3)
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={24}
+            value={settings.collect_interval_hours}
+            onChange={(e) => setSettings((p) => ({ ...p, collect_interval_hours: e.target.value }))}
+            className="w-32 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">뉴스 자동 수집 간격 (1~24시간). 변경 후 서버 재시작 필요.</p>
+        </div>
 
         <div>
           <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">

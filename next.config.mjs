@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Enable dark mode via media query (system preference)
+  experimental: {
+    instrumentationHook: true,
+  },
 };
 
 export default nextConfig;
