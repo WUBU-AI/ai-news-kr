@@ -185,13 +185,14 @@ export default async function ArticlePage({ params }: PageProps) {
     description: article.summaryBullets[0] ?? '',
     url: `${BASE_URL}/articles/${params.id}`,
     datePublished: article.publishedAt?.toISOString(),
-    dateModified: article.publishedAt?.toISOString(),
+    dateModified: article.collectedAt.toISOString(),
+    author: { '@type': 'Organization', name: 'AI 뉴스 KR' },
     publisher: {
       '@type': 'Organization',
       name: 'AI 뉴스 KR',
       url: BASE_URL,
     },
-    keywords: article.tags.join(', '),
+    keywords: article.tags,
     articleSection: article.category ?? undefined,
     inLanguage: 'ko',
   };
