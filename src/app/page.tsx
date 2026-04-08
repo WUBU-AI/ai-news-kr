@@ -66,20 +66,35 @@ function timeAgo(date: Date | null): string {
 }
 
 interface PageProps {
-  searchParams: Promise<{ page?: string; category?: string; tag?: string }>;
+  searchParams: Promise<{ page?: string; category?: string | string[]; tag?: string | string[] }>;
 }
 
 export default async function HomePage({ searchParams }: PageProps) {
   const params = await searchParams;
   const page = Math.max(1, parseInt(params?.page || '1', 10));
-  const category = params?.category || null;
-  const tag = params?.tag || null;
+
+  // Support multi-value: category=LLM&category=로봇 → ['LLM', '로봇']
+  const rawCategories = params?.category;
+  const rawTags = params?.tag;
+  const categories = rawCategories
+    ? Array.isArray(rawCategories) ? rawCategories : [rawCategories]
+    : [];
+  const tags = rawTags
+    ? Array.isArray(rawTags) ? rawTags : [rawTags]
+    : [];
+
   const skip = (page - 1) * PAGE_SIZE;
+
+  // Build OR conditions for multi-select filters
+  const categoryFilter = categories.length > 0 ? { category: { in: categories } } : {};
+  const tagFilter = tags.length > 0
+    ? { OR: tags.map((t) => ({ tags: { has: t } })) }
+    : {};
 
   const translatedWhere = {
     translatedTitle: { not: null },
-    ...(category ? { category } : {}),
-    ...(tag ? { tags: { has: tag } } : {}),
+    ...categoryFilter,
+    ...tagFilter,
   };
 
   let articles: Awaited<ReturnType<typeof prisma.article.findMany>> = [];
@@ -112,7 +127,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         orderBy: { publishedAt: 'desc' },
       }),
       // Untranslated articles (score below threshold — not translated yet)
-      !category && !tag
+      categories.length === 0 && tags.length === 0
         ? prisma.article.findMany({
             where: { translatedTitle: null },
             orderBy: [{ importanceScore: 'desc' }, { publishedAt: 'desc' }],
@@ -200,10 +215,10 @@ export default async function HomePage({ searchParams }: PageProps) {
         <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-12 text-center">
           <div className="text-4xl mb-3">📰</div>
           <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {category || tag ? '해당 필터에 맞는 기사가 없습니다' : '아직 수집된 기사가 없습니다'}
+            {categories.length > 0 || tags.length > 0 ? '해당 필터에 맞는 기사가 없습니다' : '아직 수집된 기사가 없습니다'}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {category || tag ? '다른 카테고리나 태그를 선택해 보세요.' : '뉴스는 3시간마다 자동으로 수집됩니다.'}
+            {categories.length > 0 || tags.length > 0 ? '다른 카테고리나 태그를 선택해 보세요.' : '뉴스는 3시간마다 자동으로 수집됩니다.'}
           </p>
         </div>
       )}
@@ -282,7 +297,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         <div className="flex items-center justify-center gap-2 mt-8">
           {page > 1 && (
             <Link
-              href={`/?page=${page - 1}${category ? `&category=${category}` : ''}${tag ? `&tag=${tag}` : ''}`}
+              href={`/?${new URLSearchParams([['page', String(page - 1)], ...categories.map((c) => ['category', c] as [string, string]), ...tags.map((t) => ['tag', t] as [string, string])]).toString()}`}
               className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               ← 이전
@@ -293,7 +308,7 @@ export default async function HomePage({ searchParams }: PageProps) {
           </span>
           {page < totalPages && (
             <Link
-              href={`/?page=${page + 1}${category ? `&category=${category}` : ''}${tag ? `&tag=${tag}` : ''}`}
+              href={`/?${new URLSearchParams([['page', String(page + 1)], ...categories.map((c) => ['category', c] as [string, string]), ...tags.map((t) => ['tag', t] as [string, string])]).toString()}`}
               className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               다음 →
@@ -303,7 +318,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       )}
 
       {/* Untranslated articles section */}
-      {!category && !tag && untranslatedArticles.length > 0 && (
+      {categories.length === 0 && tags.length === 0 && untranslatedArticles.length > 0 && (
         <section className="mt-12">
           <div className="flex items-center gap-2 mb-3">
             <h2 className="text-base font-semibold text-gray-700 dark:text-gray-300">
