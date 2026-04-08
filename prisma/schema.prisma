@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Article {
+  id               String    @id @default(cuid())
+  sourceUrl        String    @unique @map("source_url")
+  sourceName       String    @map("source_name")
+  originalTitle    String    @map("original_title")
+  originalContent  String?   @map("original_content") @db.Text
+  translatedTitle  String?   @map("translated_title")
+  summaryBullets   String[]  @map("summary_bullets")
+  importanceScore  Float     @default(0) @map("importance_score")
+  category         String?
+  tags             String[]
+  publishedAt      DateTime? @map("published_at")
+  collectedAt      DateTime  @default(now()) @map("collected_at")
+  isFeatured       Boolean   @default(false) @map("is_featured")
+  viewCount        Int       @default(0) @map("view_count")
+
+  @@map("articles")
+}
+
+model Setting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model CollectionLog {
+  id                  String   @id @default(cuid())
+  runAt               DateTime @default(now()) @map("run_at")
+  sourcesChecked      Int      @default(0) @map("sources_checked")
+  articlesCollected   Int      @default(0) @map("articles_collected")
+  articlesTranslated  Int      @default(0) @map("articles_translated")
+  status              String   @default("success") // success | failed | partial
+  errorMessage        String?  @map("error_message") @db.Text
+
+  @@map("collection_logs")
+}
