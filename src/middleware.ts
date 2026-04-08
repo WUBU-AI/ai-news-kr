@@ -26,7 +26,7 @@ export function middleware(request: NextRequest) {
   return new NextResponse('Unauthorized', {
     status: 401,
     headers: {
-      'WWW-Authenticate': 'Basic realm="AI 뉴스 KR 관리자"',
+      'WWW-Authenticate': 'Basic realm="AI News KR Admin"',
     },
   });
 }
