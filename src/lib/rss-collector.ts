@@ -64,11 +64,16 @@ async function collectFromSource(
 
       const title = item.title || 'Untitled';
       const snippet = item.contentSnippet || (item as FeedItem).content?.slice(0, 500) || '';
-      const publishedAt = item.isoDate
-        ? new Date(item.isoDate)
-        : item.pubDate
-          ? new Date(item.pubDate)
-          : new Date();
+
+      // Use actual publish date from feed/scraper; fall back to null (not crawl time)
+      let publishedAt: Date | null = null;
+      if (item.isoDate) {
+        const d = new Date(item.isoDate);
+        if (!isNaN(d.getTime())) publishedAt = d;
+      } else if (item.pubDate) {
+        const d = new Date(item.pubDate);
+        if (!isNaN(d.getTime())) publishedAt = d;
+      }
 
       let importanceScore = 5;
       try {
@@ -86,7 +91,7 @@ async function collectFromSource(
           importanceScore,
           category: source.category || null,
           isKorean,
-          publishedAt: isNaN(publishedAt.getTime()) ? new Date() : publishedAt,
+          publishedAt,
         },
       });
 
