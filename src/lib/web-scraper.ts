@@ -135,7 +135,7 @@ function scrapeUpstage(html: string, baseUrl: string): ScrapedItem[] {
     // Skip language/category index pages
     if (/\/blog\/(en|ko)?\/?$/.test(href)) return;
 
-    const link = href.startsWith('http') ? href : `https://upstage.ai${href}`;
+    const link = href.startsWith('http') ? href : `${baseUrl}${href}`;
     if (items.some((i) => i.link === link)) return;
 
     const title =

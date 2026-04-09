@@ -164,16 +164,6 @@ function parseResponse(text: string, originalTitle: string): TranslationResult {
   };
 }
 
-async function translateAndSummarize(
-  originalTitle: string,
-  originalContent: string | null,
-  model: TranslateModel
-): Promise<TranslationResult> {
-  const prompt = buildPrompt(originalTitle, originalContent);
-  const text = runCli(model, prompt);
-  return parseResponse(text, originalTitle);
-}
-
 export interface TranslationSummary {
   articlesTranslated: number;
   modelUsed: string;
