@@ -7,7 +7,7 @@ import { scoreImportance, getScoreModel } from '@/lib/scorer';
 // Query params:
 //   ?all=true   — re-score every article regardless of current score
 //   ?limit=N    — max articles to process per call (default 10, max 50)
-// Uses the local CLI model configured in settings (translate_model, default: claude_cli).
+// Uses score_model DB setting (default: ollama/qwen3:8b). No API key required.
 
 export async function POST(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const totalRemaining = rescoreAll
+    const remaining = rescoreAll
       ? 0
       : await prisma.article.count({ where: { importanceScore: 5 } });
 
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       updated,
       errors,
       model,
-      remaining: totalRemaining,
+      remaining,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
