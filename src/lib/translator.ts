@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { prisma } from './prisma';
+import { ollamaTranslateBasic, ollamaDetailedSummary } from './ollama';
 
 // Supported local CLI translate models
 export type TranslateModel = 'claude_cli' | 'gemini_cli' | 'codex_cli';
@@ -48,6 +49,20 @@ Rules:
 - tags: 3 to 5 relevant Korean or English tags (short keywords)
 
 Respond with ONLY the JSON object, no other text.`;
+}
+
+function buildDetailedSummaryPrompt(originalTitle: string, originalContent: string | null): string {
+  return `You are an AI news analyst for Korean software engineers.
+
+Article title: ${originalTitle}
+Content: ${originalContent || '(no content available)'}
+
+Write a detailed analysis in Korean (2 to 4 paragraphs) covering:
+- Technical background and how the technology works
+- Real-world impact for developers/engineers
+- What developers should know or take action on
+
+Each paragraph separated by a newline. Output ONLY the analysis text in Korean, no titles or extra commentary.`;
 }
 
 function runCli(model: TranslateModel, prompt: string): string {
@@ -115,15 +130,18 @@ async function translateAndSummarize(
 
 export interface TranslationSummary {
   articlesTranslated: number;
-  modelUsed: TranslateModel;
+  modelUsed: string;
+  hybridMode: boolean;
   errors: string[];
 }
 
 export async function translateTopArticles(): Promise<TranslationSummary> {
-  // Read settings: collect_count (default 3) and translate_model (default claude_cli)
-  const [countSetting, modelSetting] = await Promise.all([
+  // Read settings
+  const [countSetting, modelSetting, maxSetting, thresholdSetting] = await Promise.all([
     prisma.setting.findUnique({ where: { key: 'collect_count' } }),
     prisma.setting.findUnique({ where: { key: 'translate_model' } }),
+    prisma.setting.findUnique({ where: { key: 'claude_max_articles' } }),
+    prisma.setting.findUnique({ where: { key: 'claude_score_threshold' } }),
   ]);
 
   const collectCount = countSetting ? parseInt(countSetting.value, 10) || 10 : 10;
@@ -133,38 +151,93 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
       ? modelValue
       : 'claude_cli';
 
+  // B-3 하이브리드 설정: claude_max_articles > 0 이면 하이브리드 모드 활성화
+  const claudeMaxArticles = maxSetting ? Math.max(0, parseInt(maxSetting.value, 10) || 0) : 3;
+  const claudeScoreThreshold = thresholdSetting ? parseInt(thresholdSetting.value, 10) || 7 : 7;
+  const hybridMode = claudeMaxArticles > 0;
+
   // Fetch top N untranslated articles by importance score
   const articles = await prisma.article.findMany({
     where: { translatedTitle: null },
     orderBy: { importanceScore: 'desc' },
     take: collectCount,
-    select: { id: true, originalTitle: true, originalContent: true },
+    select: { id: true, originalTitle: true, originalContent: true, importanceScore: true },
   });
 
   const errors: string[] = [];
   let translated = 0;
 
-  for (const article of articles) {
-    try {
-      const result = await translateAndSummarize(article.originalTitle, article.originalContent, model);
+  if (!hybridMode) {
+    // 표준 모드: 설정된 CLI 모델로 전체 번역
+    for (const article of articles) {
+      try {
+        const result = await translateAndSummarize(article.originalTitle, article.originalContent, model);
 
-      await prisma.article.update({
-        where: { id: article.id },
-        data: {
-          translatedTitle: result.translatedTitle,
-          summaryBullets: [...result.summaryBullets, result.engineerNote].filter(Boolean),
-          detailedSummary: result.detailedSummary || null,
-          category: result.category,
-          tags: result.tags,
-        },
-      });
+        await prisma.article.update({
+          where: { id: article.id },
+          data: {
+            translatedTitle: result.translatedTitle,
+            summaryBullets: [...result.summaryBullets, result.engineerNote].filter(Boolean),
+            detailedSummary: result.detailedSummary || null,
+            category: result.category,
+            tags: result.tags,
+          },
+        });
 
-      translated++;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      errors.push(`[${article.originalTitle.slice(0, 50)}] ${msg}`);
+        translated++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`[${article.originalTitle.slice(0, 50)}] ${msg}`);
+      }
+    }
+  } else {
+    // B-3 하이브리드 모드:
+    //   - 기본 번역 (제목, 불릿, 카테고리, 태그): 모든 기사에 Ollama
+    //   - 상세 분석: 스코어 ≥ threshold인 상위 N개만 Claude CLI, 나머지 Ollama
+    const claudeEligibleIds = new Set(
+      articles
+        .filter((a) => a.importanceScore >= claudeScoreThreshold)
+        .sort((a, b) => b.importanceScore - a.importanceScore)
+        .slice(0, claudeMaxArticles)
+        .map((a) => a.id),
+    );
+
+    for (const article of articles) {
+      try {
+        // 1단계: 기본 번역 (Ollama)
+        const basic = await ollamaTranslateBasic(article.originalTitle, article.originalContent);
+
+        // 2단계: 상세 분석 (Claude CLI 또는 Ollama)
+        let detailedSummary: string;
+        if (claudeEligibleIds.has(article.id)) {
+          detailedSummary = runCli(model, buildDetailedSummaryPrompt(article.originalTitle, article.originalContent));
+        } else {
+          detailedSummary = await ollamaDetailedSummary(article.originalTitle, article.originalContent);
+        }
+
+        await prisma.article.update({
+          where: { id: article.id },
+          data: {
+            translatedTitle: basic.translatedTitle,
+            summaryBullets: [...basic.summaryBullets, basic.engineerNote].filter(Boolean),
+            detailedSummary: detailedSummary || null,
+            category: basic.category,
+            tags: basic.tags,
+          },
+        });
+
+        translated++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`[${article.originalTitle.slice(0, 50)}] ${msg}`);
+      }
     }
   }
 
-  return { articlesTranslated: translated, modelUsed: model, errors };
+  return {
+    articlesTranslated: translated,
+    modelUsed: hybridMode ? `hybrid (Ollama + ${model})` : model,
+    hybridMode,
+    errors,
+  };
 }
