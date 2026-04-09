@@ -2,6 +2,10 @@ export interface RssSource {
   name: string;
   url: string;
   category?: string;
+  /** Language of content: 'en' (default) or 'ko'. Korean articles skip translation, only summarize. */
+  lang?: 'en' | 'ko';
+  /** If set, fetch this URL via HTML scraping instead of RSS parsing */
+  scrapeUrl?: string;
 }
 
 export const RSS_SOURCES: RssSource[] = [
@@ -102,13 +106,67 @@ export const RSS_SOURCES: RssSource[] = [
     url: 'https://aiweekly.co/issues.rss',
     category: 'newsletter',
   },
+
+  // ── 해외 AI 기업 (cheerio 스크래퍼) ─────────────────────────────────────────
+  // scrapeUrl 지정 시 RSS 파싱 대신 HTML 스크래핑으로 수집
+  {
+    name: 'Anthropic News',
+    url: '',
+    scrapeUrl: 'https://www.anthropic.com/news',
+    category: 'company',
+  },
+  {
+    name: 'Meta AI Blog',
+    url: '',
+    scrapeUrl: 'https://ai.meta.com/blog/',
+    category: 'company',
+  },
+  {
+    name: 'Mistral AI News',
+    url: '',
+    scrapeUrl: 'https://mistral.ai/news/',
+    category: 'company',
+  },
+
+  // ── 한국 AI 기업 (RSS) ────────────────────────────────────────────────────
+  {
+    name: '네이버 D2 Blog',
+    url: 'https://d2.naver.com/d2.atom',
+    category: 'korean-ai',
+    lang: 'ko',
+  },
+  {
+    name: '카카오테크 Blog',
+    url: 'https://tech.kakao.com/feed/',
+    category: 'korean-ai',
+    lang: 'ko',
+  },
+  {
+    name: '카카오엔터프라이즈 Blog',
+    url: 'https://kakaoenterprise.github.io/feed.xml',
+    category: 'korean-ai',
+    lang: 'ko',
+  },
+
+  // ── 한국 AI 기업 (cheerio 스크래퍼) ─────────────────────────────────────────
+  {
+    name: 'Naver CLOVA Tech Blog',
+    url: '',
+    scrapeUrl: 'https://clova.ai/tech-blog',
+    category: 'korean-ai',
+    lang: 'ko',
+  },
+  {
+    name: '업스테이지 Blog',
+    url: '',
+    scrapeUrl: 'https://upstage.ai/blog',
+    category: 'korean-ai',
+    lang: 'ko',
+  },
 ];
 
-// ── RSS 미제공 — 크롤링 검토 대상 (별도 구현 필요) ─────────────────────────
-// OpenAI      : https://openai.com/news/  (RSS 403 차단)
-// Anthropic   : https://www.anthropic.com/news  (RSS 없음)
-// Mistral AI  : https://mistral.ai/news  (RSS 없음)
-// Meta AI     : https://ai.meta.com/blog/  (RSS 404)
-//
-// 이 소스들은 HTML 스크래퍼(puppeteer / cheerio) 또는
-// unofficial RSS 프록시(rss.app, rsshub) 를 통해 수집 가능.
+// ── 미지원 소스 (향후 구현 필요) ───────────────────────────────────────────────
+// OpenAI      : https://openai.com/news/  (403 차단 — puppeteer 또는 rss.app 필요)
+// LG AI 연구원  : https://www.lgresearch.ai/blog  (JS 렌더링 — puppeteer 필요)
+// 삼성리서치    : https://research.samsung.com/blog  (JS 렌더링 — puppeteer 필요)
+// 현대자동차    : 공개 AI 블로그 미확인

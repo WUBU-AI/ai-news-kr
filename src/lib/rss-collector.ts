@@ -2,6 +2,7 @@ import Parser from 'rss-parser';
 import { prisma } from './prisma';
 import { RSS_SOURCES, RssSource } from './rss-sources';
 import { scoreImportance, getScoreModel } from './scorer';
+import { scrapeSource } from './web-scraper';
 
 const parser = new Parser({
   timeout: 10000,
@@ -31,10 +32,24 @@ async function collectFromSource(
 ): Promise<{ collected: number; errors: string[] }> {
   const errors: string[] = [];
   let collected = 0;
+  const isKorean = source.lang === 'ko';
 
   try {
-    const feed = await parser.parseURL(source.url);
-    const items: FeedItem[] = feed.items || [];
+    let items: FeedItem[];
+
+    if (source.scrapeUrl) {
+      // Web scraper path
+      const scraped = await scrapeSource(source);
+      if (!scraped) {
+        errors.push(`[${source.name}] No scraper registered for ${source.scrapeUrl}`);
+        return { collected, errors };
+      }
+      items = scraped;
+    } else {
+      // RSS/Atom path
+      const feed = await parser.parseURL(source.url);
+      items = feed.items || [];
+    }
 
     for (const item of items.slice(0, 20)) {
       const url = item.link;
@@ -48,7 +63,7 @@ async function collectFromSource(
       if (existing) continue;
 
       const title = item.title || 'Untitled';
-      const snippet = item.contentSnippet || item.content?.slice(0, 500) || '';
+      const snippet = item.contentSnippet || (item as FeedItem).content?.slice(0, 500) || '';
       const publishedAt = item.isoDate
         ? new Date(item.isoDate)
         : item.pubDate
@@ -70,6 +85,7 @@ async function collectFromSource(
           originalContent: snippet || null,
           importanceScore,
           category: source.category || null,
+          isKorean,
           publishedAt: isNaN(publishedAt.getTime()) ? new Date() : publishedAt,
         },
       });

@@ -48,12 +48,41 @@ export interface OllamaBasicResult {
 /**
  * AI 뉴스 기사의 기본 번역·요약을 Ollama로 생성한다.
  * 제목 번역, 핵심 불릿, 엔지니어 노트, 카테고리, 태그를 반환한다.
+ * @param isKorean 한국어 기사인 경우 true — 번역 없이 요약만 생성
  */
 export async function ollamaTranslateBasic(
   title: string,
   content: string | null,
+  isKorean = false,
 ): Promise<OllamaBasicResult> {
-  const prompt = `You are an AI news translator and summarizer for Korean software engineers and developers.
+  const prompt = isKorean
+    ? `당신은 한국 소프트웨어 엔지니어를 위한 AI 뉴스 요약 전문가입니다.
+
+기사 제목 (한국어): ${title}
+기사 내용/발췌: ${content || '(내용 없음)'}
+
+아래 JSON 형식으로만 응답하세요:
+{
+  "translatedTitle": "${title}",
+  "summaryBullets": [
+    "핵심 내용 1",
+    "핵심 내용 2",
+    "핵심 내용 3"
+  ],
+  "engineerNote": "개발자/엔지니어 관점에서 중요한 이유 한 줄",
+  "category": "카테고리",
+  "tags": ["태그1", "태그2", "태그3"]
+}
+
+규칙:
+- translatedTitle: 원문 제목 그대로 사용 (번역 불필요)
+- summaryBullets: 핵심 내용 3~5개를 한국어로 정리
+- engineerNote: 개발자에게 왜 중요한지 한 문장으로
+- category: LLM, 이미지AI, 로봇, 자율주행, 업계동향, 연구, 기타 중 하나
+- tags: 관련 태그 3~5개
+
+JSON만 응답하세요.`
+    : `You are an AI news translator and summarizer for Korean software engineers and developers.
 
 Article title (English): ${title}
 Article content/snippet: ${content || '(no content available)'}
@@ -103,12 +132,26 @@ Respond with ONLY the JSON object, no other text.`;
 /**
  * AI 뉴스 기사의 상세 분석 단락을 Ollama로 생성한다.
  * 기술적 배경, 실용적 영향, 개발자 관점의 분석을 2~3문단으로 반환한다.
+ * @param isKorean 한국어 기사인 경우 true — 번역 없이 분석만 생성
  */
 export async function ollamaDetailedSummary(
   title: string,
   content: string | null,
+  isKorean = false,
 ): Promise<string> {
-  const prompt = `You are an AI news analyst for Korean software engineers.
+  const prompt = isKorean
+    ? `당신은 한국 소프트웨어 엔지니어를 위한 AI 기사 분석가입니다.
+
+기사 제목: ${title}
+기사 내용: ${content || '(내용 없음)'}
+
+다음 내용을 포함하여 2~3 문단의 상세 분석을 한국어로 작성하세요:
+1. 기술적 배경 및 작동 원리
+2. 개발자/엔지니어에게 미치는 실질적인 영향
+3. 개발자가 주의하거나 행동해야 할 사항
+
+각 문단은 줄바꿈으로 구분하세요. 제목 없이 분석 텍스트만 출력하세요.`
+    : `You are an AI news analyst for Korean software engineers.
 
 Article title: ${title}
 Content: ${content || '(no content available)'}

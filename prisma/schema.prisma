@@ -25,6 +25,7 @@ model Article {
   detailedSummary  String?   @map("detailed_summary") @db.Text
   isFeatured       Boolean   @default(false) @map("is_featured")
   viewCount        Int       @default(0) @map("view_count")
+  isKorean         Boolean   @default(false) @map("is_korean")
 
   @@map("articles")
 }

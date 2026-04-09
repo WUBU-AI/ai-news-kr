@@ -51,6 +51,38 @@ Rules:
 Respond with ONLY the JSON object, no other text.`;
 }
 
+/** Prompt for Korean-language articles — summarize only, no translation needed. */
+function buildKoreanPrompt(originalTitle: string, originalContent: string | null): string {
+  return `당신은 한국 소프트웨어 엔지니어를 위한 AI 뉴스 요약 전문가입니다.
+
+기사 제목 (한국어): ${originalTitle}
+기사 내용/발췌: ${originalContent || '(내용 없음)'}
+
+아래 JSON 형식으로만 응답하세요:
+{
+  "translatedTitle": "원문 제목 그대로 사용",
+  "summaryBullets": [
+    "핵심 내용 1",
+    "핵심 내용 2",
+    "핵심 내용 3"
+  ],
+  "engineerNote": "개발자/엔지니어 관점에서 중요한 이유 한 줄",
+  "detailedSummary": "2~4 문단으로 구성된 상세 요약. 기술적 배경, 작동 원리, 실제 영향, 개발자가 알아야 할 세부사항을 포함한다.",
+  "category": "카테고리",
+  "tags": ["태그1", "태그2", "태그3"]
+}
+
+규칙:
+- translatedTitle: 원문 제목을 그대로 사용 (번역 불필요)
+- summaryBullets: 핵심 내용 3~5개를 한국어로 정리
+- engineerNote: 개발자에게 왜 중요한지 한 문장으로
+- detailedSummary: 2~4 문단의 상세 요약 (각 문단은 줄바꿈으로 구분)
+- category: LLM, 이미지AI, 로봇, 자율주행, 업계동향, 연구, 기타 중 하나
+- tags: 관련 태그 3~5개
+
+JSON만 응답하고 다른 텍스트는 포함하지 마세요.`;
+}
+
 function buildDetailedSummaryPrompt(originalTitle: string, originalContent: string | null): string {
   return `You are an AI news analyst for Korean software engineers.
 
@@ -63,6 +95,20 @@ Write a detailed analysis in Korean (2 to 4 paragraphs) covering:
 - What developers should know or take action on
 
 Each paragraph separated by a newline. Output ONLY the analysis text in Korean, no titles or extra commentary.`;
+}
+
+function buildKoreanDetailedPrompt(originalTitle: string, originalContent: string | null): string {
+  return `당신은 한국 소프트웨어 엔지니어를 위한 AI 기사 분석가입니다.
+
+기사 제목: ${originalTitle}
+기사 내용: ${originalContent || '(내용 없음)'}
+
+다음 내용을 포함하여 2~4 문단의 상세 분석을 한국어로 작성하세요:
+- 기술적 배경 및 작동 원리
+- 개발자/엔지니어에게 미치는 실질적인 영향
+- 개발자가 알아야 할 사항 또는 취해야 할 행동
+
+각 문단은 줄바꿈으로 구분하세요. 제목이나 부가 설명 없이 분석 텍스트만 출력하세요.`;
 }
 
 function runCli(model: TranslateModel, prompt: string): string {
@@ -161,17 +207,23 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
     where: { translatedTitle: null },
     orderBy: { importanceScore: 'desc' },
     take: collectCount,
-    select: { id: true, originalTitle: true, originalContent: true, importanceScore: true },
+    select: { id: true, originalTitle: true, originalContent: true, importanceScore: true, isKorean: true },
   });
 
   const errors: string[] = [];
   let translated = 0;
 
   if (!hybridMode) {
-    // 표준 모드: 설정된 CLI 모델로 전체 번역
+    // 표준 모드: 설정된 CLI 모델로 전체 번역/요약
     for (const article of articles) {
       try {
-        const result = await translateAndSummarize(article.originalTitle, article.originalContent, model);
+        // 한국어 기사는 번역 없이 요약만
+        const prompt = article.isKorean
+          ? buildKoreanPrompt(article.originalTitle, article.originalContent)
+          : buildPrompt(article.originalTitle, article.originalContent);
+
+        const text = runCli(model, prompt);
+        const result = parseResponse(text, article.originalTitle);
 
         await prisma.article.update({
           where: { id: article.id },
@@ -194,6 +246,7 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
     // B-3 하이브리드 모드:
     //   - 기본 번역 (제목, 불릿, 카테고리, 태그): 모든 기사에 Ollama
     //   - 상세 분석: 스코어 ≥ threshold인 상위 N개만 Claude CLI, 나머지 Ollama
+    //   - 한국어 기사: 번역 없이 요약만 (Ollama 한국어 프롬프트)
     const claudeEligibleIds = new Set(
       articles
         .filter((a) => a.importanceScore >= claudeScoreThreshold)
@@ -204,15 +257,24 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
 
     for (const article of articles) {
       try {
-        // 1단계: 기본 번역 (Ollama)
-        const basic = await ollamaTranslateBasic(article.originalTitle, article.originalContent);
+        let basic;
+        if (article.isKorean) {
+          // 한국어 기사: Ollama로 요약만 (번역 건너뜀)
+          basic = await ollamaTranslateBasic(article.originalTitle, article.originalContent, true);
+        } else {
+          // 영어 기사: Ollama로 번역 + 요약
+          basic = await ollamaTranslateBasic(article.originalTitle, article.originalContent, false);
+        }
 
-        // 2단계: 상세 분석 (Claude CLI 또는 Ollama)
+        // 상세 분석 (Claude CLI 또는 Ollama)
         let detailedSummary: string;
         if (claudeEligibleIds.has(article.id)) {
-          detailedSummary = runCli(model, buildDetailedSummaryPrompt(article.originalTitle, article.originalContent));
+          const detailedPrompt = article.isKorean
+            ? buildKoreanDetailedPrompt(article.originalTitle, article.originalContent)
+            : buildDetailedSummaryPrompt(article.originalTitle, article.originalContent);
+          detailedSummary = runCli(model, detailedPrompt);
         } else {
-          detailedSummary = await ollamaDetailedSummary(article.originalTitle, article.originalContent);
+          detailedSummary = await ollamaDetailedSummary(article.originalTitle, article.originalContent, article.isKorean);
         }
 
         await prisma.article.update({
