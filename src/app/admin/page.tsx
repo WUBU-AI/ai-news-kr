@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import ManualCollectButton from './ManualCollectButton';
 import RescoreButton from './RescoreButton';
 
+export const dynamic = 'force-dynamic';
+
 function formatKST(date: Date | null): string {
   if (!date) return '-';
   return new Intl.DateTimeFormat('ko-KR', {
