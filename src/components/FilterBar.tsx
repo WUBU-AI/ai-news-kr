@@ -13,16 +13,18 @@ interface FilterState {
 
 interface FilterBarProps {
   availableTags?: string[];
+  currentSort?: string;
 }
 
-function buildParams(categories: string[], tags: string[]): string {
+function buildParams(categories: string[], tags: string[], sort?: string): string {
   const params = new URLSearchParams();
+  if (sort && sort !== 'date') params.set('sort', sort);
   for (const cat of categories) params.append('category', cat);
   for (const tag of tags) params.append('tag', tag);
   return params.toString();
 }
 
-export default function FilterBar({ availableTags = [] }: FilterBarProps) {
+export default function FilterBar({ availableTags = [], currentSort = 'date' }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -30,6 +32,7 @@ export default function FilterBar({ availableTags = [] }: FilterBarProps) {
 
   const currentCategories = searchParams.getAll('category');
   const currentTags = searchParams.getAll('tag');
+  const sort = searchParams.get('sort') ?? currentSort;
 
   // On mount, restore filter from localStorage if no filter in URL
   useEffect(() => {
@@ -50,12 +53,18 @@ export default function FilterBar({ availableTags = [] }: FilterBarProps) {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function applyFilter(categories: string[], tags: string[]) {
+  function applyFilter(categories: string[], tags: string[], newSort?: string) {
+    const appliedSort = newSort ?? sort;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ categories, tags }));
     } catch { /* ignore */ }
 
-    const qs = buildParams(categories, tags);
+    const qs = buildParams(categories, tags, appliedSort);
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  }
+
+  function changeSort(newSort: string) {
+    const qs = buildParams(currentCategories, currentTags, newSort);
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }
 
@@ -63,22 +72,22 @@ export default function FilterBar({ availableTags = [] }: FilterBarProps) {
     const next = currentCategories.includes(cat)
       ? currentCategories.filter((c) => c !== cat)
       : [...currentCategories, cat];
-    applyFilter(next, currentTags);
+    applyFilter(next, currentTags, sort);
   }
 
   function toggleTag(tag: string) {
     const next = currentTags.includes(tag)
       ? currentTags.filter((t) => t !== tag)
       : [...currentTags, tag];
-    applyFilter(currentCategories, next);
+    applyFilter(currentCategories, next, sort);
   }
 
   function selectAllCategories() {
-    applyFilter([...CATEGORIES], currentTags);
+    applyFilter([...CATEGORIES], currentTags, sort);
   }
 
   function selectAllTags() {
-    applyFilter(currentCategories, [...availableTags]);
+    applyFilter(currentCategories, [...availableTags], sort);
   }
 
   function clearAll() {
@@ -94,6 +103,22 @@ export default function FilterBar({ availableTags = [] }: FilterBarProps) {
 
   return (
     <div className="mb-5 space-y-2">
+      {/* Sort + Category row */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Sort select */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 dark:text-gray-500">정렬</span>
+          <select
+            value={sort}
+            onChange={(e) => changeSort(e.target.value)}
+            className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-400"
+          >
+            <option value="date">최신순</option>
+            <option value="score">중요도순</option>
+          </select>
+        </div>
+      </div>
+
       {/* Category filter */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">카테고리</span>
