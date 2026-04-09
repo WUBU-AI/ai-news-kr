@@ -66,12 +66,13 @@ function timeAgo(date: Date | null): string {
 }
 
 interface PageProps {
-  searchParams: Promise<{ page?: string; category?: string | string[]; tag?: string | string[] }>;
+  searchParams: Promise<{ page?: string; category?: string | string[]; tag?: string | string[]; sort?: string }>;
 }
 
 export default async function HomePage({ searchParams }: PageProps) {
   const params = await searchParams;
   const page = Math.max(1, parseInt(params?.page || '1', 10));
+  const sort = params?.sort === 'score' ? 'score' : 'date';
 
   // Support multi-value: category=LLM&category=로봇 → ['LLM', '로봇']
   const rawCategories = params?.category;
@@ -109,7 +110,9 @@ export default async function HomePage({ searchParams }: PageProps) {
     const [articleData, countData, lastLog, adSetting, tagRows, untranslatedData] = await Promise.all([
       prisma.article.findMany({
         where: translatedWhere,
-        orderBy: [{ importanceScore: 'desc' }, { publishedAt: 'desc' }],
+        orderBy: sort === 'score'
+          ? [{ importanceScore: 'desc' }, { publishedAt: 'desc' }]
+          : [{ publishedAt: 'desc' }],
         skip,
         take: PAGE_SIZE,
       }),
@@ -197,7 +200,7 @@ export default async function HomePage({ searchParams }: PageProps) {
 
       {/* Filter Bar */}
       <Suspense>
-        <FilterBar availableTags={popularTags} />
+        <FilterBar availableTags={popularTags} currentSort={sort} />
       </Suspense>
 
       {/* DB Error */}
@@ -297,7 +300,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         <div className="flex items-center justify-center gap-2 mt-8">
           {page > 1 && (
             <Link
-              href={`/?${new URLSearchParams([['page', String(page - 1)], ...categories.map((c) => ['category', c] as [string, string]), ...tags.map((t) => ['tag', t] as [string, string])]).toString()}`}
+              href={`/?${new URLSearchParams([['page', String(page - 1)], ...(sort === 'score' ? [['sort', 'score']] as [string, string][] : []), ...categories.map((c) => ['category', c] as [string, string]), ...tags.map((t) => ['tag', t] as [string, string])]).toString()}`}
               className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               ← 이전
@@ -308,7 +311,7 @@ export default async function HomePage({ searchParams }: PageProps) {
           </span>
           {page < totalPages && (
             <Link
-              href={`/?${new URLSearchParams([['page', String(page + 1)], ...categories.map((c) => ['category', c] as [string, string]), ...tags.map((t) => ['tag', t] as [string, string])]).toString()}`}
+              href={`/?${new URLSearchParams([['page', String(page + 1)], ...(sort === 'score' ? [['sort', 'score']] as [string, string][] : []), ...categories.map((c) => ['category', c] as [string, string]), ...tags.map((t) => ['tag', t] as [string, string])]).toString()}`}
               className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               다음 →
