@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { prisma } from './prisma';
 import { ollamaTranslateBasic, ollamaDetailedSummary } from './ollama';
+import { selectTranslationTargets } from './article-selector';
 
 // Supported local CLI translate models
 export type TranslateModel = 'claude_cli' | 'gemini_cli' | 'codex_cli';
@@ -192,13 +193,26 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
   const claudeScoreThreshold = thresholdSetting ? parseInt(thresholdSetting.value, 10) || 7 : 7;
   const hybridMode = claudeMaxArticles > 0;
 
-  // Fetch top N untranslated articles by importance score
-  const articles = await prisma.article.findMany({
+  // 5단계 필터링을 위해 미번역 기사를 넓게 조회한 뒤 선별
+  // (단순 score 상위 N개 → 12시간/중복/소스순서 5단계 필터링으로 교체)
+  const candidates = await prisma.article.findMany({
     where: { translatedTitle: null },
-    orderBy: { importanceScore: 'desc' },
-    take: collectCount,
-    select: { id: true, originalTitle: true, originalContent: true, importanceScore: true, isKorean: true },
+    select: {
+      id: true,
+      sourceName: true,
+      originalTitle: true,
+      originalContent: true,
+      importanceScore: true,
+      publishedAt: true,
+      isKorean: true,
+    },
   });
+
+  const selected = selectTranslationTargets(candidates, collectCount);
+
+  // 선별된 ID 기준으로 isKorean/originalContent 포함한 전체 정보 매핑
+  const articleMap = new Map(candidates.map((a) => [a.id, a]));
+  const articles = selected.map((s) => articleMap.get(s.id)!).filter(Boolean);
 
   const errors: string[] = [];
   let translated = 0;
