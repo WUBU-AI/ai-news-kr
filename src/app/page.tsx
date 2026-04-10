@@ -66,7 +66,7 @@ function timeAgo(date: Date | null): string {
 }
 
 interface PageProps {
-  searchParams: Promise<{ page?: string; category?: string | string[]; tag?: string | string[]; sort?: string }>;
+  searchParams: Promise<{ page?: string; category?: string | string[]; tag?: string | string[]; source?: string | string[]; sort?: string }>;
 }
 
 export default async function HomePage({ searchParams }: PageProps) {
@@ -77,11 +77,15 @@ export default async function HomePage({ searchParams }: PageProps) {
   // Support multi-value: category=LLM&category=로봇 → ['LLM', '로봇']
   const rawCategories = params?.category;
   const rawTags = params?.tag;
+  const rawSources = params?.source;
   const categories = rawCategories
     ? Array.isArray(rawCategories) ? rawCategories : [rawCategories]
     : [];
   const tags = rawTags
     ? Array.isArray(rawTags) ? rawTags : [rawTags]
+    : [];
+  const sources = rawSources
+    ? Array.isArray(rawSources) ? rawSources : [rawSources]
     : [];
 
   const skip = (page - 1) * PAGE_SIZE;
@@ -91,11 +95,13 @@ export default async function HomePage({ searchParams }: PageProps) {
   const tagFilter = tags.length > 0
     ? { OR: tags.map((t) => ({ tags: { has: t } })) }
     : {};
+  const sourceFilter = sources.length > 0 ? { sourceName: { in: sources } } : {};
 
   const translatedWhere = {
     translatedTitle: { not: null },
     ...categoryFilter,
     ...tagFilter,
+    ...sourceFilter,
   };
 
   let articles: Awaited<ReturnType<typeof prisma.article.findMany>> = [];
@@ -104,10 +110,11 @@ export default async function HomePage({ searchParams }: PageProps) {
   let dbError = false;
   let adsensePublisherId = '';
   let popularTags: string[] = [];
+  let availableSources: string[] = [];
   let untranslatedArticles: { id: string; originalTitle: string; importanceScore: number; sourceUrl: string; sourceName: string; publishedAt: Date | null }[] = [];
 
   try {
-    const [articleData, countData, lastLog, adSetting, tagRows, untranslatedData] = await Promise.all([
+    const [articleData, countData, lastLog, adSetting, tagRows, sourceRows, untranslatedData] = await Promise.all([
       prisma.article.findMany({
         where: translatedWhere,
         orderBy: sort === 'score'
@@ -129,8 +136,15 @@ export default async function HomePage({ searchParams }: PageProps) {
         take: 100,
         orderBy: { publishedAt: 'desc' },
       }),
+      // Collect distinct source names from recent translated articles
+      prisma.article.findMany({
+        where: { translatedTitle: { not: null } },
+        select: { sourceName: true },
+        distinct: ['sourceName'],
+        orderBy: { publishedAt: 'desc' },
+      }),
       // Untranslated articles (score below threshold — not translated yet)
-      categories.length === 0 && tags.length === 0
+      categories.length === 0 && tags.length === 0 && sources.length === 0
         ? prisma.article.findMany({
             where: { translatedTitle: null },
             orderBy: [{ importanceScore: 'desc' }, { publishedAt: 'desc' }],
@@ -164,6 +178,8 @@ export default async function HomePage({ searchParams }: PageProps) {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20)
       .map(([t]) => t);
+
+    availableSources = sourceRows.map((r) => r.sourceName).sort();
   } catch {
     dbError = true;
   }
@@ -200,7 +216,7 @@ export default async function HomePage({ searchParams }: PageProps) {
 
       {/* Filter Bar */}
       <Suspense>
-        <FilterBar availableTags={popularTags} currentSort={sort} />
+        <FilterBar availableTags={popularTags} availableSources={availableSources} currentSort={sort} />
       </Suspense>
 
       {/* DB Error */}
@@ -218,10 +234,10 @@ export default async function HomePage({ searchParams }: PageProps) {
         <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-12 text-center">
           <div className="text-4xl mb-3">📰</div>
           <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {categories.length > 0 || tags.length > 0 ? '해당 필터에 맞는 기사가 없습니다' : '아직 수집된 기사가 없습니다'}
+            {categories.length > 0 || tags.length > 0 || sources.length > 0 ? '해당 필터에 맞는 기사가 없습니다' : '아직 수집된 기사가 없습니다'}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {categories.length > 0 || tags.length > 0 ? '다른 카테고리나 태그를 선택해 보세요.' : '뉴스는 3시간마다 자동으로 수집됩니다.'}
+            {categories.length > 0 || tags.length > 0 || sources.length > 0 ? '다른 카테고리, 태그, 또는 출처를 선택해 보세요.' : '뉴스는 3시간마다 자동으로 수집됩니다.'}
           </p>
         </div>
       )}
@@ -300,7 +316,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         <div className="flex items-center justify-center gap-2 mt-8">
           {page > 1 && (
             <Link
-              href={`/?${new URLSearchParams([['page', String(page - 1)], ...(sort === 'score' ? [['sort', 'score']] as [string, string][] : []), ...categories.map((c) => ['category', c] as [string, string]), ...tags.map((t) => ['tag', t] as [string, string])]).toString()}`}
+              href={`/?${new URLSearchParams([['page', String(page - 1)], ...(sort === 'score' ? [['sort', 'score']] as [string, string][] : []), ...categories.map((c) => ['category', c] as [string, string]), ...tags.map((t) => ['tag', t] as [string, string]), ...sources.map((s) => ['source', s] as [string, string])]).toString()}`}
               className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               ← 이전
@@ -311,7 +327,7 @@ export default async function HomePage({ searchParams }: PageProps) {
           </span>
           {page < totalPages && (
             <Link
-              href={`/?${new URLSearchParams([['page', String(page + 1)], ...(sort === 'score' ? [['sort', 'score']] as [string, string][] : []), ...categories.map((c) => ['category', c] as [string, string]), ...tags.map((t) => ['tag', t] as [string, string])]).toString()}`}
+              href={`/?${new URLSearchParams([['page', String(page + 1)], ...(sort === 'score' ? [['sort', 'score']] as [string, string][] : []), ...categories.map((c) => ['category', c] as [string, string]), ...tags.map((t) => ['tag', t] as [string, string]), ...sources.map((s) => ['source', s] as [string, string])]).toString()}`}
               className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               다음 →
