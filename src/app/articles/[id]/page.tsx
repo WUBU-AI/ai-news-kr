@@ -178,6 +178,7 @@ export default async function ArticlePage({ params }: PageProps) {
 
   if (!article) notFound();
 
+  const articleOgImageUrl = `${BASE_URL}/articles/${params.id}/opengraph-image`;
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'NewsArticle',
@@ -186,6 +187,12 @@ export default async function ArticlePage({ params }: PageProps) {
     url: `${BASE_URL}/articles/${params.id}`,
     datePublished: article.publishedAt?.toISOString(),
     dateModified: article.collectedAt.toISOString(),
+    image: {
+      '@type': 'ImageObject',
+      url: articleOgImageUrl,
+      width: 1200,
+      height: 630,
+    },
     author: { '@type': 'Organization', name: 'AI 뉴스 KR' },
     publisher: {
       '@type': 'Organization',

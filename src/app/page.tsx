@@ -7,19 +7,27 @@ import type { Metadata } from 'next';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai-news-kr.vercel.app';
 
-export async function generateMetadata(): Promise<Metadata> {
+const PAGE_SIZE = 20;
+
+interface PageProps {
+  searchParams: Promise<{ page?: string; category?: string | string[]; tag?: string | string[]; source?: string | string[]; sort?: string }>;
+}
+
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params?.page || '1', 10));
   return {
     alternates: {
       canonical: BASE_URL,
     },
+    // Paginated pages beyond the first are noindex to avoid duplicate content
+    ...(page > 1 && { robots: { index: false, follow: true } }),
   };
 }
 
-const PAGE_SIZE = 20;
-
 function importanceColor(score: number): string {
   if (score >= 8) return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
-  if (score <= 3) return 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800';
+  if (score <= 3) return 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-gray-700';
   return 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
 }
 
@@ -63,10 +71,6 @@ function timeAgo(date: Date | null): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}일 전`;
   return formatKST(date);
-}
-
-interface PageProps {
-  searchParams: Promise<{ page?: string; category?: string | string[]; tag?: string | string[]; source?: string | string[]; sort?: string }>;
 }
 
 export default async function HomePage({ searchParams }: PageProps) {
@@ -186,8 +190,30 @@ export default async function HomePage({ searchParams }: PageProps) {
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
+  const websiteJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'AI 뉴스 KR',
+    url: BASE_URL,
+    description: '영어 AI 뉴스를 한국어로 번역·요약해 제공합니다. LLM, 이미지AI, 로봇, 자율주행 등 최신 AI 동향을 빠르게 파악하세요.',
+    inLanguage: 'ko',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: `${BASE_URL}/?tag={search_term_string}`,
+      },
+      'query-input': 'required name=search_term_string',
+    },
+  };
+
   return (
     <div>
+      {/* WebSite structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+      />
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold mb-1">오늘의 AI 뉴스</h1>
