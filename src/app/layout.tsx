@@ -17,23 +17,25 @@ const geistMono = localFont({
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai-news-kr.vercel.app';
 
-async function getLayoutSettings(): Promise<{ adsensePublisherId: string; naverSiteVerificationCode: string }> {
+async function getLayoutSettings(): Promise<{ adsensePublisherId: string; naverSiteVerificationCode: string; googleSiteVerificationCode: string }> {
   try {
-    const [adsenseSetting, naverSetting] = await Promise.all([
+    const [adsenseSetting, naverSetting, gscSetting] = await Promise.all([
       prisma.setting.findUnique({ where: { key: 'adsense_publisher_id' } }),
       prisma.setting.findUnique({ where: { key: 'naver_search_advisor_code' } }),
+      prisma.setting.findUnique({ where: { key: 'google_search_console_code' } }),
     ]);
     return {
       adsensePublisherId: adsenseSetting?.value || '',
       naverSiteVerificationCode: naverSetting?.value || '',
+      googleSiteVerificationCode: gscSetting?.value || '',
     };
   } catch {
-    return { adsensePublisherId: '', naverSiteVerificationCode: '' };
+    return { adsensePublisherId: '', naverSiteVerificationCode: '', googleSiteVerificationCode: '' };
   }
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { adsensePublisherId, naverSiteVerificationCode } = await getLayoutSettings();
+  const { adsensePublisherId, naverSiteVerificationCode, googleSiteVerificationCode } = await getLayoutSettings();
   return {
     title: "AI 뉴스 KR — 개발자를 위한 AI 최신 소식",
     description:
@@ -56,9 +58,10 @@ export async function generateMetadata(): Promise<Metadata> {
     ...(adsensePublisherId && {
       other: { 'google-adsense-account': adsensePublisherId },
     }),
-    ...(naverSiteVerificationCode && {
+    ...((naverSiteVerificationCode || googleSiteVerificationCode) && {
       verification: {
-        other: { 'naver-site-verification': naverSiteVerificationCode },
+        ...(googleSiteVerificationCode && { google: googleSiteVerificationCode }),
+        ...(naverSiteVerificationCode && { other: { 'naver-site-verification': naverSiteVerificationCode } }),
       },
     }),
   };
