@@ -59,6 +59,11 @@ function timeAgo(date: Date | null): string {
   return formatKST(date);
 }
 
+function estimateReadingTime(text: string): number {
+  const charCount = text.replace(/\s/g, '').length;
+  return Math.max(1, Math.ceil(charCount / 500));
+}
+
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai-news-kr.vercel.app';
 
 interface PageProps {
@@ -247,6 +252,12 @@ export default async function ArticlePage({ params }: PageProps) {
         <time dateTime={article.publishedAt?.toISOString()}>
           {formatKST(article.publishedAt)}
         </time>
+        {article.detailedSummary && (
+          <>
+            <span>·</span>
+            <span>약 {estimateReadingTime(article.detailedSummary + (article.summaryBullets?.join(' ') ?? ''))}분 읽기</span>
+          </>
+        )}
         {article.viewCount > 0 && (
           <>
             <span>·</span>
@@ -276,12 +287,12 @@ export default async function ArticlePage({ params }: PageProps) {
       {article.detailedSummary && (
         <section className="mb-6">
           <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-            상세 분석
+            심층 분석
           </h2>
-          <div className="space-y-3">
-            {article.detailedSummary.split('\n').filter(Boolean).map((para, i) => (
-              <p key={i} className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
-                {para}
+          <div className="space-y-4 text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
+            {article.detailedSummary.split('\n').filter((p) => p.trim().length > 0).map((para, i) => (
+              <p key={i} className="leading-7">
+                {para.trim()}
               </p>
             ))}
           </div>

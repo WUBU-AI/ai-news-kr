@@ -22,39 +22,41 @@ interface TranslationResult {
 }
 
 function buildPrompt(originalTitle: string, originalContent: string | null): string {
-  return `You are an AI news translator and summarizer for Korean software engineers and developers.
+  return `You are an expert AI news analyst and translator for Korean software engineers and developers. Your goal is to produce high-quality, in-depth Korean analysis that provides genuine value beyond simple translation.
 
 Article title (English): ${originalTitle}
 Article content/snippet: ${originalContent || '(no content available)'}
 
-Please analyze and respond with ONLY a valid JSON object in this exact format:
+Please analyze deeply and respond with ONLY a valid JSON object in this exact format:
 {
   "translatedTitle": "한국어로 번역된 제목",
   "summaryBullets": [
-    "핵심 내용 1",
-    "핵심 내용 2",
-    "핵심 내용 3"
+    "핵심 내용 1 — 구체적인 사실, 수치, 또는 기술적 세부사항 포함",
+    "핵심 내용 2 — 구체적인 사실, 수치, 또는 기술적 세부사항 포함",
+    "핵심 내용 3 — 구체적인 사실, 수치, 또는 기술적 세부사항 포함",
+    "핵심 내용 4 — 구체적인 사실, 수치, 또는 기술적 세부사항 포함",
+    "핵심 내용 5 — 구체적인 사실, 수치, 또는 기술적 세부사항 포함"
   ],
-  "engineerNote": "개발자/엔지니어 관점에서 중요한 이유 한 줄",
-  "detailedSummary": "2~4 문단으로 구성된 더 상세한 한국어 내용. 기술적 배경, 작동 원리, 실제 영향, 개발자가 알아야 할 세부사항을 포함한다.",
+  "engineerNote": "개발자/엔지니어가 지금 당장 알아야 할 가장 중요한 실무적 시사점 한 줄",
+  "detailedSummary": "4~6 문단으로 구성된 심층 한국어 분석. 각 문단은 빈 줄로 구분. 아래 구조를 따를 것:\n\n[기술적 배경] 이 기술·서비스의 배경과 기존 방식과의 차별점을 구체적으로 서술.\n\n[핵심 내용] 발표·발견된 구체적인 내용, 수치, 메커니즘을 상세히 서술.\n\n[산업 및 생태계 영향] AI·소프트웨어 산업과 개발 생태계에 미치는 영향을 분석.\n\n[개발자 실무 영향] 개발자의 워크플로우, 도구 선택, 기술 스택, 프로젝트 계획에 미치는 실질적 영향.\n\n[시사점 및 전망] 이 발전이 의미하는 바와 앞으로 주목해야 할 방향성.",
   "category": "카테고리",
-  "tags": ["태그1", "태그2", "태그3"]
+  "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"]
 }
 
 Rules:
-- translatedTitle: Translate the title naturally into Korean
-- summaryBullets: 3 to 5 bullet points in Korean summarizing the key points
-- engineerNote: One concise Korean sentence explaining why this matters to developers/engineers
-- detailedSummary: 2 to 4 paragraphs in Korean with deeper analysis — technical background, how it works, real-world impact, and what developers should know. Each paragraph separated by a newline.
+- translatedTitle: Translate the title precisely and naturally into Korean
+- summaryBullets: EXACTLY 5 bullet points in Korean. Each must include specific facts, numbers, model names, or concrete technical details. Avoid vague generalities.
+- engineerNote: One specific Korean sentence about immediate practical impact for developers — include actionable insight or concrete recommendation
+- detailedSummary: 4 to 6 substantial paragraphs in Korean. Each paragraph must be at least 3 sentences. Cover: (1) technical background, (2) specific announced content, (3) industry/ecosystem impact, (4) developer workflow impact, (5) implications and outlook. Total must be at least 600 Korean characters.
 - category: Choose exactly ONE from: LLM, 이미지AI, 로봇, 자율주행, 업계동향, 연구, 기타
-- tags: 3 to 5 relevant Korean or English tags (short keywords)
+- tags: 4 to 5 relevant Korean or English tags (short keywords, not duplicating the title words)
 
 Respond with ONLY the JSON object, no other text.`;
 }
 
 /** Prompt for Korean-language articles — summarize only, no translation needed. */
 function buildKoreanPrompt(originalTitle: string, originalContent: string | null): string {
-  return `당신은 한국 소프트웨어 엔지니어를 위한 AI 뉴스 요약 전문가입니다.
+  return `당신은 한국 소프트웨어 엔지니어를 위한 AI 뉴스 심층 분석 전문가입니다. 단순 요약을 넘어 독자에게 고유한 가치를 제공하는 심층 분석을 생성하세요.
 
 기사 제목 (한국어): ${originalTitle}
 기사 내용/발췌: ${originalContent || '(내용 없음)'}
@@ -63,53 +65,69 @@ function buildKoreanPrompt(originalTitle: string, originalContent: string | null
 {
   "translatedTitle": "원문 제목 그대로 사용",
   "summaryBullets": [
-    "핵심 내용 1",
-    "핵심 내용 2",
-    "핵심 내용 3"
+    "핵심 내용 1 — 구체적인 사실, 수치, 기술적 세부사항 포함",
+    "핵심 내용 2 — 구체적인 사실, 수치, 기술적 세부사항 포함",
+    "핵심 내용 3 — 구체적인 사실, 수치, 기술적 세부사항 포함",
+    "핵심 내용 4 — 구체적인 사실, 수치, 기술적 세부사항 포함",
+    "핵심 내용 5 — 구체적인 사실, 수치, 기술적 세부사항 포함"
   ],
-  "engineerNote": "개발자/엔지니어 관점에서 중요한 이유 한 줄",
-  "detailedSummary": "2~4 문단으로 구성된 상세 요약. 기술적 배경, 작동 원리, 실제 영향, 개발자가 알아야 할 세부사항을 포함한다.",
+  "engineerNote": "개발자가 지금 당장 알아야 할 가장 중요한 실무적 시사점 한 줄",
+  "detailedSummary": "4~6 문단으로 구성된 심층 한국어 분석. 각 문단은 빈 줄로 구분. 아래 구조를 따를 것:\n\n[기술적 배경] 이 기술·서비스의 배경과 기존 방식과의 차별점 서술.\n\n[핵심 내용] 발표·발견된 구체적 내용, 수치, 메커니즘 상세 서술.\n\n[산업 및 생태계 영향] AI·소프트웨어 산업과 개발 생태계에 미치는 영향 분석.\n\n[개발자 실무 영향] 개발자 워크플로우, 도구 선택, 기술 스택에 미치는 실질적 영향.\n\n[시사점 및 전망] 이 발전의 의미와 앞으로 주목해야 할 방향성.",
   "category": "카테고리",
-  "tags": ["태그1", "태그2", "태그3"]
+  "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"]
 }
 
 규칙:
 - translatedTitle: 원문 제목을 그대로 사용 (번역 불필요)
-- summaryBullets: 핵심 내용 3~5개를 한국어로 정리
-- engineerNote: 개발자에게 왜 중요한지 한 문장으로
-- detailedSummary: 2~4 문단의 상세 요약 (각 문단은 줄바꿈으로 구분)
+- summaryBullets: 정확히 5개. 각 항목에 구체적 사실, 수치, 모델명, 기술적 세부사항 포함. 막연한 일반론 금지.
+- engineerNote: 개발자에게 바로 적용 가능한 구체적 실무 시사점 한 문장
+- detailedSummary: 4~6개의 충실한 문단 (각 문단 최소 3문장). 총 600자 이상. 기술 배경·핵심 내용·산업 영향·실무 영향·전망을 모두 포함.
 - category: LLM, 이미지AI, 로봇, 자율주행, 업계동향, 연구, 기타 중 하나
-- tags: 관련 태그 3~5개
+- tags: 관련 태그 4~5개 (제목 단어 반복 금지)
 
 JSON만 응답하고 다른 텍스트는 포함하지 마세요.`;
 }
 
 function buildDetailedSummaryPrompt(originalTitle: string, originalContent: string | null): string {
-  return `You are an AI news analyst for Korean software engineers.
+  return `You are an expert AI news analyst for Korean software engineers. Your analysis must provide genuine, in-depth value that goes beyond simple translation or summarization.
 
 Article title: ${originalTitle}
 Content: ${originalContent || '(no content available)'}
 
-Write a detailed analysis in Korean (2 to 4 paragraphs) covering:
-- Technical background and how the technology works
-- Real-world impact for developers/engineers
-- What developers should know or take action on
+Write a comprehensive analysis in Korean with 4 to 6 paragraphs, following this structure exactly:
 
-Each paragraph separated by a newline. Output ONLY the analysis text in Korean, no titles or extra commentary.`;
+Paragraph 1 — [기술적 배경]: Explain the technical context, what problem this solves, and how it differs from previous approaches. At least 3 sentences.
+
+Paragraph 2 — [핵심 내용]: Describe the specific announced content, key features, benchmarks, numbers, or mechanisms in detail. At least 3 sentences.
+
+Paragraph 3 — [산업 및 생태계 영향]: Analyze how this affects the AI industry, developer ecosystem, competitive landscape, or market dynamics. At least 3 sentences.
+
+Paragraph 4 — [개발자 실무 영향]: Explain concrete effects on developer workflows, tool choices, technology stacks, API usage, or project planning. At least 3 sentences.
+
+Paragraph 5 — [시사점 및 전망]: Provide your analytical perspective on what this development means long-term and what developers should watch for next. At least 3 sentences.
+
+Separate each paragraph with a blank line. Output ONLY the analysis text in Korean. Do NOT include section labels or headers. Total output must be at least 600 Korean characters.`;
 }
 
 function buildKoreanDetailedPrompt(originalTitle: string, originalContent: string | null): string {
-  return `당신은 한국 소프트웨어 엔지니어를 위한 AI 기사 분석가입니다.
+  return `당신은 한국 소프트웨어 엔지니어를 위한 AI 기사 심층 분석가입니다. 단순 요약을 넘어 독자에게 고유한 가치를 제공하는 심층 분석을 작성하세요.
 
 기사 제목: ${originalTitle}
 기사 내용: ${originalContent || '(내용 없음)'}
 
-다음 내용을 포함하여 2~4 문단의 상세 분석을 한국어로 작성하세요:
-- 기술적 배경 및 작동 원리
-- 개발자/엔지니어에게 미치는 실질적인 영향
-- 개발자가 알아야 할 사항 또는 취해야 할 행동
+다음 구조에 따라 4~6 문단의 심층 분석을 한국어로 작성하세요:
 
-각 문단은 줄바꿈으로 구분하세요. 제목이나 부가 설명 없이 분석 텍스트만 출력하세요.`;
+1문단 — [기술적 배경]: 이 기술의 배경, 해결하려는 문제, 기존 방식과의 차이점을 구체적으로 서술. 최소 3문장.
+
+2문단 — [핵심 내용]: 발표·발견된 구체적 내용, 수치, 기능, 메커니즘을 상세히 서술. 최소 3문장.
+
+3문단 — [산업 및 생태계 영향]: AI 산업, 개발자 생태계, 경쟁 구도, 시장 역학에 미치는 영향 분석. 최소 3문장.
+
+4문단 — [개발자 실무 영향]: 개발자 워크플로우, 도구 선택, 기술 스택, API 활용, 프로젝트 계획에 미치는 구체적 영향. 최소 3문장.
+
+5문단 — [시사점 및 전망]: 이 발전의 장기적 의미와 앞으로 개발자가 주목해야 할 방향에 대한 분석적 시각. 최소 3문장.
+
+각 문단은 빈 줄로 구분하세요. 섹션 제목·레이블 없이 분석 텍스트만 출력하세요. 총 출력은 600자 이상이어야 합니다.`;
 }
 
 function runCli(model: TranslateModel, prompt: string): string {
@@ -157,12 +175,21 @@ function parseResponse(text: string, originalTitle: string): TranslationResult {
 
   return {
     translatedTitle: parsed.translatedTitle || originalTitle,
-    summaryBullets: Array.isArray(parsed.summaryBullets) ? parsed.summaryBullets.slice(0, 5) : [],
+    summaryBullets: Array.isArray(parsed.summaryBullets) ? parsed.summaryBullets.slice(0, 6) : [],
     engineerNote: parsed.engineerNote || '',
     detailedSummary: parsed.detailedSummary || '',
     category,
     tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 5) : [],
   };
+}
+
+/** 최소 콘텐츠 품질 기준 충족 여부 확인. Google AdSense thin-content 방지용. */
+function meetsContentQuality(result: TranslationResult): boolean {
+  if (result.summaryBullets.length < 3) return false;
+  if (!result.detailedSummary || result.detailedSummary.length < 200) return false;
+  const paragraphs = result.detailedSummary.split('\n').filter((p) => p.trim().length > 0);
+  if (paragraphs.length < 2) return false;
+  return true;
 }
 
 export interface TranslationSummary {
@@ -229,6 +256,11 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
         const text = runCli(model, prompt);
         const result = parseResponse(text, article.originalTitle);
 
+        if (!meetsContentQuality(result)) {
+          errors.push(`[${article.originalTitle.slice(0, 50)}] 콘텐츠 품질 기준 미달 — 저장 건너뜀 (bullets:${result.summaryBullets.length}, summary:${result.detailedSummary?.length ?? 0}자)`);
+          continue;
+        }
+
         await prisma.article.update({
           where: { id: article.id },
           data: {
@@ -279,6 +311,20 @@ export async function translateTopArticles(): Promise<TranslationSummary> {
           detailedSummary = runCli(model, detailedPrompt);
         } else {
           detailedSummary = await ollamaDetailedSummary(article.originalTitle, article.originalContent, article.isKorean);
+        }
+
+        const hybridResult: TranslationResult = {
+          translatedTitle: basic.translatedTitle,
+          summaryBullets: basic.summaryBullets,
+          engineerNote: basic.engineerNote,
+          detailedSummary,
+          category: basic.category,
+          tags: basic.tags,
+        };
+
+        if (!meetsContentQuality(hybridResult)) {
+          errors.push(`[${article.originalTitle.slice(0, 50)}] 콘텐츠 품질 기준 미달 — 저장 건너뜀 (bullets:${basic.summaryBullets.length}, summary:${detailedSummary?.length ?? 0}자)`);
+          continue;
         }
 
         await prisma.article.update({
